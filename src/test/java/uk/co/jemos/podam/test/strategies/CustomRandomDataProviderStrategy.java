@@ -14,14 +14,6 @@ public class CustomRandomDataProviderStrategy extends AbstractRandomDataProvider
 	 * {@inheritDoc}
 	 */
 	@Override
-	public int getMaxDepth(Class<?> type) {
-		return 1;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
 	public int getNumberOfCollectionElements(Class<?> type) {
 
 		int number;

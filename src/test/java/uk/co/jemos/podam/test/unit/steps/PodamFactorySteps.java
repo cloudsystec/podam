@@ -1,33 +1,34 @@
 package uk.co.jemos.podam.test.unit.steps;
 
 import net.thucydides.core.annotations.Step;
+import org.hibernate.validator.constraints.Email;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
 import uk.co.jemos.podam.api.*;
 import uk.co.jemos.podam.common.AttributeStrategy;
+import uk.co.jemos.podam.common.PodamConstants;
 import uk.co.jemos.podam.test.dto.annotations.PojoSpecific;
 import uk.co.jemos.podam.test.strategies.CustomRandomDataProviderStrategy;
+import uk.co.jemos.podam.test.strategies.EmailStrategy;
 import uk.co.jemos.podam.test.unit.features.extensions.NonEJBClassInfoStrategy;
 import uk.co.jemos.podam.test.unit.features.externalFactory.TestExternalFactory;
 import uk.co.jemos.podam.test.unit.features.inheritance.CustomDataProviderStrategy;
 import uk.co.jemos.podam.test.unit.features.inheritance.TrackingExternalFactory;
 import uk.co.jemos.podam.test.unit.features.xmlTypes.XmlTypesExternalFactory;
-import uk.co.jemos.podam.typeManufacturers.IntTypeManufacturerImpl;
-import uk.co.jemos.podam.typeManufacturers.StringTypeManufacturerImpl;
-import uk.co.jemos.podam.typeManufacturers.TypeManufacturer;
+import uk.co.jemos.podam.typeManufacturers.TypeManufacturerParamsWrapper;
 
 import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.ValidatorFactory;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,18 +36,15 @@ import java.util.Set;
  */
 public class PodamFactorySteps {
 
-    private AbstractClassInfoStrategy classInfoStrategy = new AbstractClassInfoStrategy() {};
-
     @Step("Given a standard Podam Factory")
     public PodamFactory givenAStandardPodamFactory() {
         return new PodamFactoryImpl();
     }
 
-    @Step("Given a Podam Factory with a Custom String Manufacturer")
-    public PodamFactory givenAPodamWithACustomStringTypeManufacturer() {
+    @Step("Given a Podam Factory to use as External Factory")
+    public PodamFactory givenAPodamExternalFactorytoTestAttributeMetadata() {
 
-        TypeManufacturer<String> manufacturer = new StringTypeManufacturerImpl() {
-
+        PodamFactory factory = new PodamFactoryImpl(new AbstractRandomDataProviderStrategy() {
             @Override
             public String getStringValue(AttributeMetadata attributeMetadata) {
 
@@ -56,54 +54,8 @@ public class PodamFactorySteps {
                     return "classic";
                 }
             }
-        };
+        });
 
-        return givenAPodamWithACustomTypeManufacturer(String.class, manufacturer);
-    }
-
-    @Step("Given a Podam Factory with a Custom Integer Manufacturer")
-    public PodamFactory givenAPodamWithACustomIntegerTypeManufacturer() {
-
-        TypeManufacturer<Integer> manufacturer = new IntTypeManufacturerImpl() {
-
-            @Override
-            public Integer getInteger(AttributeMetadata attributeMetadata) {
-
-                if (attributeMetadata.getPojoClass() == Timestamp.class) {
-                    return PodamUtils.getIntegerInRange(0, 999999999);
-                } else {
-                    return super.getInteger(attributeMetadata);
-                }
-            }
-        };
-
-        return givenAPodamWithACustomTypeManufacturer(int.class, manufacturer);
-    }
-
-    @Step("Given a Podam Factory with an Input Stream Manufacturer")
-    public PodamFactory givenAPodamWithAInputStreamTypeManufacturer() {
-
-        TypeManufacturer<InputStream> manufacturer = new TypeManufacturer<InputStream>() {
-
-            @Override
-            public InputStream getType(DataProviderStrategy strategy,
-                    AttributeMetadata attributeMetadata,
-                    Map<String, Type> genericTypesArgumentsMap) {
-
-                byte[] data = new byte[] { 0x0, 0x2, 0x4 };
-                return new ByteArrayInputStream(data);
-            }
-        };
-
-        return givenAPodamWithACustomTypeManufacturer(InputStream.class, manufacturer);
-    }
-
-    @Step("Given a Podam Factory with a Custom Type Manufacturer {0}")
-    public <T> PodamFactory givenAPodamWithACustomTypeManufacturer(
-            Class<T> type, TypeManufacturer<T> typeManufacturer) {
-
-        PodamFactory factory = new PodamFactoryImpl();
-        factory.getStrategy().addOrReplaceTypeManufacturer(type, typeManufacturer);
         return factory;
     }
 
@@ -127,9 +79,7 @@ public class PodamFactorySteps {
 
         ClassAttributeApprover nullApprover = null;
 
-        return classInfoStrategy.getClassInfo(pojoClass, excludeAnnotations,
-                excludeFields, nullApprover,
-                Collections.<Method>emptySet());
+        return PodamUtils.getClassInfo(pojoClass, excludeAnnotations, excludeFields, nullApprover);
 
     }
 
@@ -148,7 +98,7 @@ public class PodamFactorySteps {
         return new TestExternalFactory();
     }
 
-    @Step("Given a Podam Factory with external factory {0}")
+    @Step("Given a Podam Factory with external factory")
     public PodamFactory givenAdPodamFactoryWithExternalFactory(PodamFactory externalFactory) {
         return new PodamFactoryImpl(externalFactory);
     }
@@ -194,34 +144,13 @@ public class PodamFactorySteps {
         return new CustomRandomDataProviderStrategy();
     }
 
-    @Step("Given a Podam Factory with custom strategy {1} for annotation {0}")
-    public PodamFactory givenAPodamFactoryWithCustomStrategy(Class<? extends Annotation> annotation, AttributeStrategy<?> strategy) {
+    @Step("Given a Podam Factory with Email strategy")
+    public PodamFactory givenAPodamFactoryWithEmailStrategy() {
 
         PodamFactory factory = new PodamFactoryImpl();
-        ((RandomDataProviderStrategy)factory.getStrategy()).addOrReplaceAttributeStrategy(annotation, strategy);
-        return factory;
-    }
 
-    @Step("Remove a custom strategy {1} from a Podam Factory")
-    public PodamFactory removeCustomStrategy(PodamFactory podamFactory, Class<? extends Annotation> annotation) {
-
-        PodamFactory factory = new PodamFactoryImpl();
-        ((RandomDataProviderStrategy)factory.getStrategy()).removeAttributeStrategy(annotation);
-        return factory;
-    }
-
-    @Step("Given a Podam Factory with Defined Factory {1} for an Abstract Class {0}")
-    public PodamFactory givenAPodamFactoryWithDefinedFactoryForAnAbstractClass(Class<?> abstractClass, Class<?> factoryClass) {
-
-        PodamFactory factory = new PodamFactoryImpl();
-        ((RandomDataProviderStrategy)factory.getStrategy()).addOrReplaceFactory(abstractClass, factoryClass);
-        return factory;
-    }
-
-    @Step("Remove a Defined Factory {1} for an Abstract Class from a Podam Factory")
-    public PodamFactory removeADefinedFactoryForAnAbstractClassFromAPodamFactory(PodamFactory factory, Class<?> factoryClass) {
-
-        ((RandomDataProviderStrategy)factory.getStrategy()).removeFactory(factoryClass);
+        Class<AttributeStrategy<?>> strategy = (Class<AttributeStrategy<?>>)(Class<?>)EmailStrategy.class;
+        ((RandomDataProviderStrategy)factory.getStrategy()).addOrReplaceAttributeStrategy(Email.class, strategy);
         return factory;
     }
 
@@ -234,47 +163,92 @@ public class PodamFactorySteps {
     @Step("Given a Podam factory with XML Types external factory")
     public PodamFactory givenAPodamFactoryWithXmlTypesExternalFactory() {
 
-        PodamFactory factory = new PodamFactoryImpl();
         PodamFactory externalFactory = new XmlTypesExternalFactory();
-        factory.setExternalFactory(externalFactory);
+        PodamFactory factory = new PodamFactoryImpl(externalFactory);
         return factory;
     }
 
-    @Step("Given an AttributeMetadata object")
-    public AttributeMetadata givenAnAttributeMetadata(
-            Class<?> pojoClass, Object pojoInstance, Class<?> pojoType) {
+    @Step("Given Podam Root application context")
+    public AbstractApplicationContext givenPodamRootApplicationContext() {
+
+        return new ClassPathXmlApplicationContext(PodamConstants.SPRING_ROOT_CONFIG_LOCATION);
+
+    }
+
+    @Step("Given a Message Channel to manufacture types")
+    public MessageChannel givenAMessageChannelToManufactureValues(ApplicationContext applicationContext) {
+
+        return applicationContext.getBean("podamInputChannel", MessageChannel.class);
+    }
+
+    @Step("Given an empty AttributeMetadata object")
+    public AttributeMetadata givenAnEmptyAttributeMetadata(Class<?> pojoClass) {
 
         if (null == pojoClass) {
             throw new IllegalArgumentException("pojoClass cannot be null");
         }
 
         String attributeName = null;
-        Class<?> realAttributeType = pojoType;
-        Type realGenericType = pojoType;
+        Class<?> realAttributeType = null;
         Type[] genericTypeArgs = new Type[0];
         List<Annotation> annotations = Collections.emptyList();
         AttributeMetadata attributeMetadata = new AttributeMetadata(
-                attributeName, realAttributeType, realGenericType,
-                genericTypeArgs, annotations, pojoClass, pojoInstance);
+                attributeName, realAttributeType, genericTypeArgs, annotations,
+                pojoClass);
 
         return attributeMetadata;
     }
 
+    @Step("Given a Message with header {1} and class {2}")
+    public Message<? extends Object> givenATypeManufacturingMessage(TypeManufacturerParamsWrapper paramsWrapper,
+                                                                    String headerName,
+                                                                    Class<?> clazz) {
+        Message<? extends Object> message = MessageBuilder.withPayload(
+                paramsWrapper).setHeader(headerName, clazz.getName()).build();
+        return message;
+    }
+
+    @Step("Given a Message with header {1} and qualifier {2}")
+    public Message<? extends Object> givenATypeManufacturingMessageWithStringQualifier(
+            TypeManufacturerParamsWrapper paramsWrapper,
+            String headerName,
+            String qualifier) {
+        Message<? extends Object> message = MessageBuilder.withPayload(
+                paramsWrapper).setHeader(headerName, qualifier).build();
+        return message;
+    }
+
     @Step("Given an Attribute Meta Data object for Enums")
-    public AttributeMetadata givenAnAttributeMetadataForEnums(
-            Class<?> pojoClass, Object pojoInstance) {
+    public AttributeMetadata givenAnAttributeMetadataForEnums(Class<?> pojoClass) {
         if (null == pojoClass) {
             throw new IllegalArgumentException("pojoClass cannot be null");
         }
 
         String attributeName = null;
         Class<?> realAttributeType = pojoClass;
-        Type realGenericType = pojoClass;
         Type[] genericTypeArgs = new Type[0];
         List<Annotation> annotations = Collections.emptyList();
         AttributeMetadata attributeMetadata = new AttributeMetadata(
-                attributeName, realAttributeType, realGenericType,
-                genericTypeArgs, annotations, pojoClass, pojoInstance);
+                attributeName, realAttributeType, genericTypeArgs, annotations,
+                pojoClass);
+
+        return attributeMetadata;
+    }
+
+    @Step("Given an Attribute Meta Data for Generic Types")
+    public AttributeMetadata givenAnAttributeMetadataForGenericTypes(Class<?> pojoClass) {
+
+        if (null == pojoClass) {
+            throw new IllegalArgumentException("pojoClass cannot be null");
+        }
+
+        String attributeName = null;
+        Class<?> realAttributeType = pojoClass;
+        Type[] typeParams = pojoClass.getTypeParameters();
+        List<Annotation> annotations = Collections.emptyList();
+        AttributeMetadata attributeMetadata = new AttributeMetadata(
+                attributeName, realAttributeType, typeParams, annotations,
+                pojoClass);
 
         return attributeMetadata;
     }
@@ -285,15 +259,5 @@ public class PodamFactorySteps {
         DataProviderStrategy strategy = new RandomDataProviderStrategyImpl();
         strategy.setMemoization(true);
         return strategy;
-    }
-
-    @Step("Given a Standard Podam Factory with memoization enabled")
-    public PodamFactory givenAStandardPodamFactoryWithMemoizationEnabled() {
-
-        PodamFactory podamFactory = givenAStandardPodamFactory();
-        DataProviderStrategy strategyWithMemoization = givenADataProviderStrategyWithMemoizationSetToTrue();
-        podamFactory.setStrategy(strategyWithMemoization);
-        return podamFactory;
-
     }
 }

@@ -3,10 +3,9 @@
  */
 package uk.co.jemos.podam.test.integration;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-
 import javax.annotation.Resource;
+
+import junit.framework.Assert;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -39,10 +38,9 @@ public class PodamFactoryInjectionIntegrationTest
 
 	@Before
 	public void init() {
-		assertThat("The PODAM factory cannot be null!",
-				factory, not(nullValue()));
-		assertThat("The factory strategy cannot be null!",
-				factory.getStrategy(), not(nullValue()));
+		Assert.assertNotNull("The PODAM factory cannot be null!", factory);
+		Assert.assertNotNull("The factory strategy cannot be null!",
+				factory.getStrategy());
 	}
 
 	@Test
@@ -50,13 +48,13 @@ public class PodamFactoryInjectionIntegrationTest
 
 		SimplePojoToTestSetters pojo = factory
 				.manufacturePojo(SimplePojoToTestSetters.class);
-		assertThat("The pojo cannot be null!", pojo, not(nullValue()));
+		Assert.assertNotNull("The pojo cannot be null!", pojo);
 
 		int intField = pojo.getIntField();
-		assertThat("The int field cannot be zero!", intField, not(equalTo(0)));
+		Assert.assertTrue("The int field cannot be zero!", intField != 0);
 
 		String stringField = pojo.getStringField();
-		assertThat("The string field cannot be null!", stringField, not(nullValue()));
+		Assert.assertNotNull("The string field cannot be null!", stringField);
 	}
 
 	// ------------------->> Getters / Setters

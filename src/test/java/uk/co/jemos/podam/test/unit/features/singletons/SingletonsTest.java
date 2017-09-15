@@ -9,7 +9,6 @@ import uk.co.jemos.podam.test.dto.OneDimensionalTestPojo;
 import uk.co.jemos.podam.test.dto.SingletonWithParametersInStaticFactoryPojo;
 import uk.co.jemos.podam.test.unit.AbstractPodamSteps;
 
-import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Map;
 
@@ -27,15 +26,16 @@ public class SingletonsTest extends AbstractPodamSteps {
         PodamFactory podamFactory = podamFactorySteps.givenAStandardPodamFactory();
         SingletonWithParametersInStaticFactoryPojo pojo =
                 podamInvocationSteps.whenIInvokeTheFactoryForClass(SingletonWithParametersInStaticFactoryPojo.class, podamFactory);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo, SingletonWithParametersInStaticFactoryPojo.class);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getCreateDate(), GregorianCalendar.class);
+        podamValidationSteps.theObjectShouldNotBeNull(pojo);
+        podamValidationSteps.theCalendarFieldShouldNotBeNull(pojo.getCreateDate());
         podamValidationSteps.theStringFieldCannotBeNullOrEmpty(pojo.getFirstName());
 
         List<OneDimensionalTestPojo> pojoList = pojo.getPojoList();
-        podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndContainElementsOfType(pojoList, OneDimensionalTestPojo.class);
+        podamValidationSteps.theListShouldNotBeNullAndContainAtLeastOneNonEmptyElement(pojoList);
 
         Map<String, OneDimensionalTestPojo> pojoMap = pojo.getPojoMap();
-        podamValidationSteps.theMapShouldNotBeNullOrEmptyAndContainElementsOfType(pojoMap, String.class, OneDimensionalTestPojo.class);
+        podamValidationSteps.theMapShouldContainAtLeastOneNonEmptyElement(pojoMap);
+
     }
 
 }

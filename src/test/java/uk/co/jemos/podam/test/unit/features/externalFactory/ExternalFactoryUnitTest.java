@@ -25,7 +25,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		InterfacePojo pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(InterfacePojo.class, podamFactory);
 		podamValidationSteps.theObjectShouldBeNull(pojo);
@@ -40,7 +39,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		PojoWithInterfaces pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(PojoWithInterfaces.class, podamFactory);
 		podamValidationSteps.theObjectShouldNotBeNull(pojo);
@@ -55,7 +53,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		PojoWithInterfaces pojo = podamInvocationSteps.whenIInvokeTheFactoryForClassWithFullConstructor(
 				PojoWithInterfaces.class, podamFactory);
@@ -73,7 +70,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		AbstractClass pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(AbstractClass.class, podamFactory);
 		podamValidationSteps.theObjectShouldBeNull(pojo);
@@ -88,7 +84,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		AbstractClass pojo = podamInvocationSteps.whenIInvokeTheFactoryForClassWithFullConstructor(
 				AbstractClass.class, podamFactory);
@@ -105,7 +100,6 @@ public class ExternalFactoryUnitTest extends AbstractPodamSteps {
 
 		TestExternalFactory externalFactory = (TestExternalFactory) podamFactorySteps.givenAnExternalFactory();
 		PodamFactory podamFactory = podamFactorySteps.givenAdPodamFactoryWithExternalFactory(externalFactory);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getExternalFactory(), externalFactory);
 
 		NonInstantiatableClass pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(
 				NonInstantiatableClass.class, podamFactory);

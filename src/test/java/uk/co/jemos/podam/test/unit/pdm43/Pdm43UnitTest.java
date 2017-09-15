@@ -3,7 +3,8 @@
  */
 package uk.co.jemos.podam.test.unit.pdm43;
 
-import org.junit.Assert;
+import junit.framework.Assert;
+
 import org.junit.Test;
 
 import uk.co.jemos.podam.api.PodamFactory;

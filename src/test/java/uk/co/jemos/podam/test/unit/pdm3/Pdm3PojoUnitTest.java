@@ -3,10 +3,6 @@
  */
 package uk.co.jemos.podam.test.unit.pdm3;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.junit.Assert.*;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -18,12 +14,11 @@ import uk.co.jemos.podam.test.dto.*;
 import uk.co.jemos.podam.test.dto.pdm3.Pdm3Pojo;
 import uk.co.jemos.podam.test.dto.pdm3.Pdm3PojoConstructor;
 import uk.co.jemos.podam.test.dto.pdm3.Pdm3PojoGenericsConstructor;
-import uk.co.jemos.podam.test.dto.pdm3.WildcardPojo;
 
 import java.lang.reflect.Type;
 import java.util.*;
 
-import javax.xml.bind.JAXBElement;
+import static org.junit.Assert.*;
 
 /**
  * @author Marco Tedone
@@ -60,16 +55,6 @@ public class Pdm3PojoUnitTest {
 	@After
 	public void end() {
 		assertEquals(trackingFactory.failures.toString(), 0, trackingFactory.failures.size());
-	}
-
-	@Test
-	public void testPdm3WildcardPojo() {
-
-		WildcardPojo pojo = factory.manufacturePojo(WildcardPojo.class);
-		assertNotNull(pojo);
-		assertCollection(pojo.getSomething(), JAXBElement.class);
-		assertCollection(pojo.getDescendants(), JAXBElement.class);
-		assertCollection(pojo.getAncestors(), JAXBElement.class);
 	}
 
 	@Test
@@ -205,7 +190,7 @@ public class Pdm3PojoUnitTest {
 	private void assertCollection(Collection<?> collection, Class<?> elementType) {
 
 		assertNotNull("The collection should not be null", collection);
-		assertThat("The collection should not be empty", collection, is(not(empty())));
+		assertFalse("The collection should not be empty", collection.isEmpty());
 		for (Object obj : collection) {
 			assertNotNull("Collection element should not be null", obj);
 			assertEquals("Wrong element's type", elementType, obj.getClass());
@@ -220,7 +205,7 @@ public class Pdm3PojoUnitTest {
 	private void assertMap(Map<?,?> map, Class<?> keyType, Class<?> valueType) {
 
 		assertNotNull("The map should not be null", map);
-		assertThat("The map should not be empty", map.keySet(), is(not(empty())));
+		assertFalse("The map should not be empty", map.isEmpty());
 		for (Object key : map.keySet()) {
 			assertNotNull("Key should not be empty", key);
 			assertEquals("Wrong element's type", keyType, key.getClass());

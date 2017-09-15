@@ -3,18 +3,14 @@
  */
 package uk.co.jemos.podam.test.unit.pdm45;
 
-import org.junit.Assert;
+import junit.framework.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
 import uk.co.jemos.podam.api.PodamFactory;
 import uk.co.jemos.podam.api.PodamFactoryImpl;
 import uk.co.jemos.podam.api.RandomDataProviderStrategyImpl;
 import uk.co.jemos.podam.test.dto.PodamParameterizedType;
-import uk.co.jemos.podam.test.dto.pdm45.GenericArrayPojo;
 import uk.co.jemos.podam.test.dto.pdm45.GenericAttributePojo;
-import uk.co.jemos.podam.test.dto.pdm45.GenericListPojo;
-import uk.co.jemos.podam.test.dto.pdm45.GenericMapPojo;
 import uk.co.jemos.podam.test.dto.pdm45.GenericPojo;
 import uk.co.jemos.podam.test.dto.pdm45.MultiDimensionalConstructorPojo;
 import uk.co.jemos.podam.test.dto.pdm45.MultiDimensionalTestPojo;
@@ -40,78 +36,53 @@ public class Pdm45UnitTest {
 		factory = new PodamFactoryImpl(new RandomDataProviderStrategyImpl());
 
 	}
-
-	@Test
-	public void testGenericListPojoManufacture() {
-		@SuppressWarnings("unchecked")
-		final GenericListPojo<Double, Boolean> pojo = factory.manufacturePojo(GenericListPojo.class, Double.class, Boolean.class);
-		Assert.assertNotNull("The GenericPojo object cannot be null!", pojo);
-
-		List<GenericPojo<Double, Boolean>> pojos = pojo.getGenericPojos();
-		for (GenericPojo<Double, Boolean> element : pojos) {
-			validateGenericPojo(element, Double.class, Boolean.class);
-		}
-	}
-
-	@Test
-	public void testGenericMapPojoManufacture() {
-		@SuppressWarnings("unchecked")
-		final GenericMapPojo<Double, Boolean> pojo = factory.manufacturePojo(GenericMapPojo.class, Double.class, Boolean.class);
-		Assert.assertNotNull("The GenericPojo object cannot be null!", pojo);
-
-		Map<String,GenericPojo<Double, Boolean>> pojos = pojo.getGenericPojos();
-		for (GenericPojo<Double, Boolean> element : pojos.values()) {
-			validateGenericPojo(element, Double.class, Boolean.class);
-		}
-	}
-
-	@Test
-	public void testGenericArrayPojoManufacture() {
-		@SuppressWarnings("unchecked")
-		final GenericArrayPojo<Double, Boolean> pojo = factory.manufacturePojo(GenericArrayPojo.class, Double.class, Boolean.class);
-		Assert.assertNotNull("The GenericPojo object cannot be null!", pojo);
-
-		GenericPojo<Double, Boolean>[] pojos = pojo.getGenericPojos();
-		for (GenericPojo<Double, Boolean> element : pojos) {
-			validateGenericPojo(element, Double.class, Boolean.class);
-		}
-	}
-
+	
 	@Test
 	public void testPojoWithGenericFields() {
 		final GenericAttributePojo pojo = factory.manufacturePojo(GenericAttributePojo.class);
-		Assert.assertNotNull("The GenericPojo object cannot be null!", pojo);
-
+		
 		final GenericPojo<String, Long> genericPojo = pojo.getGenericPojo();
-		validateGenericPojo(genericPojo, String.class, Long.class);
+		Assert.assertNotNull("The GenericPojo object cannot be null!", genericPojo);
+		
+		Assert.assertNotNull("The generated object cannot be null!", genericPojo.getFirstValue());
+		Assert.assertEquals("The generated object must be a String!", String.class, genericPojo.getFirstValue().getClass());
+		Assert.assertNotNull("The generated object cannot be null!", genericPojo.getSecondValue());
+		Assert.assertEquals("The generated object must be a Long!", Long.class, genericPojo.getSecondValue().getClass());
+		Assert.assertNotNull("The generated list cannot be null!", genericPojo.getFirstList());
+		Assert.assertEquals("The generated list type must be of String!", String.class, genericPojo.getFirstList().get(0).getClass());
+		Assert.assertNotNull("The generated array cannot be null!", genericPojo.getSecondArray());
+		Assert.assertEquals("The generated array type must be of Long!", Long.class, genericPojo.getSecondArray()[0].getClass());
+		Assert.assertNotNull("The generated map cannot be null!", genericPojo.getFirstSecondMap());
+		Assert.assertEquals("The generated map key type must be of String!", String.class,
+				genericPojo.getFirstSecondMap().entrySet().iterator().next().getKey().getClass());
+		Assert.assertEquals("The generated map value type must be of Long!", Long.class,
+				genericPojo.getFirstSecondMap().entrySet().iterator().next().getValue().getClass());
+		
 	}
-
+	
 	@Test
 	public void testGenericPojoManufacture() {
 		@SuppressWarnings("unchecked")
 		final GenericPojo<Double, Boolean> pojo = factory.manufacturePojo(GenericPojo.class, Double.class, Boolean.class);
-		validateGenericPojo(pojo, Double.class, Boolean.class);
-	}
-
-	private void validateGenericPojo(GenericPojo<?,?> pojo, Class<?> typeParam1, Class<?> typeParam2) {
-
+		
 		Assert.assertNotNull("The GenericPojo object cannot be null!", pojo);
 		
 		Assert.assertNotNull("The generated object cannot be null!", pojo.getFirstValue());
-		Assert.assertEquals("The generated object must be a Double!", typeParam1, pojo.getFirstValue().getClass());
+		Assert.assertEquals("The generated object must be a Double!", Double.class, pojo.getFirstValue().getClass());
 		Assert.assertNotNull("The generated object cannot be null!", pojo.getSecondValue());
-		Assert.assertEquals("The generated object must be a Boolean!", typeParam2, pojo.getSecondValue().getClass());
+		Assert.assertEquals("The generated object must be a Boolean!", Boolean.class, pojo.getSecondValue().getClass());
 		Assert.assertNotNull("The generated list cannot be null!", pojo.getFirstList());
-		Assert.assertEquals("The generated list type must be of Double!", typeParam1, pojo.getFirstList().get(0).getClass());
+		Assert.assertEquals("The generated list type must be of Double!", Double.class, pojo.getFirstList().get(0).getClass());
 		Assert.assertNotNull("The generated array cannot be null!", pojo.getSecondArray());
-		Assert.assertEquals("The generated array type must be of Boolean!", typeParam2, pojo.getSecondArray()[0].getClass());
+		Assert.assertEquals("The generated array type must be of Boolean!", Boolean.class, pojo.getSecondArray()[0].getClass());
 		Assert.assertNotNull("The generated map cannot be null!", pojo.getFirstSecondMap());
-		Assert.assertEquals("The generated map key type must be of Double!", typeParam1,
+		Assert.assertEquals("The generated map key type must be of Double!", Double.class,
 				pojo.getFirstSecondMap().entrySet().iterator().next().getKey().getClass());
-		Assert.assertEquals("The generated map value type must be of Boolean!", typeParam2,
+		Assert.assertEquals("The generated map value type must be of Boolean!", Boolean.class,
 				pojo.getFirstSecondMap().entrySet().iterator().next().getValue().getClass());
+		
 	}
-
+	
 	@Test
 	public void testMultiDimensionalTestPojo() {
 		final MultiDimensionalTestPojo pojo = factory.manufacturePojo(MultiDimensionalTestPojo.class);
@@ -203,8 +174,7 @@ public class Pdm45UnitTest {
 	 * It validates a {@link MultiDimensionalTestPojo} collection.
 	 * 
 	 * @param collection the collection to validate
-	 * @param type the type of the class to validate
-     */
+	 */
 	@SuppressWarnings("unchecked")
 	private <T> void checkMultiDimensionalCollection(final Collection<?> collection, Class<T> type) {
 		Assert.assertEquals("The generated List must have size=2!", 2, collection.size());

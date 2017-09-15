@@ -3,9 +3,6 @@
  */
 package uk.co.jemos.podam.test.strategies;
 
-import java.lang.annotation.Annotation;
-import java.util.List;
-
 import uk.co.jemos.podam.common.AttributeStrategy;
 import uk.co.jemos.podam.exceptions.PodamMockeryException;
 import uk.co.jemos.podam.test.utils.PodamTestConstants;
@@ -31,8 +28,7 @@ public class PostCodeStrategy implements AttributeStrategy<String> {
 	 * 
 	 * {@inheritDoc}
 	 */
-	@Override
-	public String getValue(Class<?> attrType, List<Annotation> annotations) throws PodamMockeryException {
+	public String getValue() throws PodamMockeryException {
 		return PodamTestConstants.POST_CODE;
 	}
 

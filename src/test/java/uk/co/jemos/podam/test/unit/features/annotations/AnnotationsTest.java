@@ -9,7 +9,6 @@ import uk.co.jemos.podam.api.PodamFactory;
 import uk.co.jemos.podam.test.dto.ConstructorWithSelfReferencesPojoAndDefaultConstructor;
 import uk.co.jemos.podam.test.dto.ExcludeAnnotationPojo;
 import uk.co.jemos.podam.test.dto.ImmutableNoHierarchicalAnnotatedPojo;
-import uk.co.jemos.podam.test.dto.SimplePojoWithMultipleAnnotationsToAttribute;
 import uk.co.jemos.podam.test.dto.annotations.*;
 import uk.co.jemos.podam.test.strategies.ByteArrayStrategy;
 import uk.co.jemos.podam.test.unit.AbstractPodamSteps;
@@ -17,8 +16,6 @@ import uk.co.jemos.podam.test.utils.PodamTestConstants;
 import uk.co.jemos.podam.test.utils.PodamTestUtils;
 
 import java.util.Calendar;
-import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,9 +36,9 @@ public class AnnotationsTest extends AbstractPodamSteps {
                 podamInvocationSteps.whenIInvokeTheFactoryForClass(ImmutableNoHierarchicalAnnotatedPojo.class, podamFactory);
         podamValidationSteps.theObjectShouldNotBeNull(pojo);
         podamValidationSteps.theIntFieldShouldNotBeZero(pojo.getIntField());
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getDateCreated(), GregorianCalendar.class);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getDateCreated().getTime(), Date.class);
-        podamValidationSteps.theArrayOfTheGivenTypeShouldNotBeNullOrEmptyAndContainElementsOfTheRightType(pojo.getLongArray(), Long.class);
+        podamValidationSteps.theCalendarFieldShouldNotBeNull(pojo.getDateCreated());
+        podamValidationSteps.theDateObjectShouldNotBeNull(pojo.getDateCreated().getTime());
+        podamValidationSteps.theLongArrayShouldNotBeNullOrEmpty(pojo.getLongArray());
         podamValidationSteps.theLongValueShouldNotBeZero(pojo.getLongArray()[0]);
     }
 
@@ -84,17 +81,17 @@ public class AnnotationsTest extends AbstractPodamSteps {
         int minValue = PodamTestConstants.NUMBER_INT_MIN_VALUE;
         maxValue = PodamTestConstants.NUMBER_INT_MAX_VALUE;
         podamValidationSteps.theIntFieldShouldHaveValueBetween(minValue, maxValue, pojo.getIntFieldWithMinAndMaxValue());
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getIntegerObjectFieldWithMinValueOnly(), Integer.class);
+        podamValidationSteps.theIntegerObjectFieldShouldNotBeNull(pojo.getIntegerObjectFieldWithMinValueOnly());
         podamValidationSteps.theIntFieldShouldBeGreaterOrEqualToZero(pojo.getIntegerObjectFieldWithMinValueOnly());
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getIntegerObjectFieldWithMaxValueOnly(), Integer.class);
+        podamValidationSteps.theIntegerObjectFieldShouldNotBeNull(pojo.getIntegerObjectFieldWithMaxValueOnly());
         maxValue = PodamTestConstants.NUMBER_INT_ONE_HUNDRED;
         podamValidationSteps.theIntFieldShouldHaveValueNotGreaterThan(pojo.getIntegerObjectFieldWithMaxValueOnly(), maxValue);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getIntegerObjectFieldWithMinAndMaxValue(), Integer.class);
+        podamValidationSteps.theIntegerObjectFieldShouldNotBeNull(pojo.getIntegerObjectFieldWithMinAndMaxValue());
         maxValue = PodamTestConstants.NUMBER_INT_MAX_VALUE;
         podamValidationSteps.theIntFieldShouldHaveValueBetween(minValue, maxValue, pojo.getIntegerObjectFieldWithMinAndMaxValue());
         int preciseValue = Integer.valueOf(PodamTestConstants.INTEGER_PRECISE_VALUE);
         podamValidationSteps.theIntFieldShouldHaveThePreciseValueOf(pojo.getIntFieldWithPreciseValue(), preciseValue);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getIntegerObjectFieldWithPreciseValue(), Integer.class);
+        podamValidationSteps.theIntegerObjectFieldShouldNotBeNull(pojo.getIntegerObjectFieldWithPreciseValue());
         podamValidationSteps.theIntFieldShouldHaveThePreciseValueOf(pojo.getIntegerObjectFieldWithPreciseValue(), preciseValue);
 
     }
@@ -112,17 +109,17 @@ public class AnnotationsTest extends AbstractPodamSteps {
         int minValue = PodamTestConstants.NUMBER_INT_MIN_VALUE;
         maxValue = PodamTestConstants.NUMBER_INT_MAX_VALUE;
         podamValidationSteps.theLongFieldShouldHaveValueBetween(minValue, maxValue, pojo.getLongFieldWithMinAndMaxValue());
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getLongObjectFieldWithMinValueOnly(), Long.class);
+        podamValidationSteps.theLongObjectFieldShouldNotBeNull(pojo.getLongObjectFieldWithMinValueOnly());
         podamValidationSteps.theLongFieldShouldBeGreaterOrEqualToZero(pojo.getLongObjectFieldWithMinValueOnly());
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getLongObjectFieldWithMaxValueOnly(), Long.class);
+        podamValidationSteps.theLongObjectFieldShouldNotBeNull(pojo.getLongObjectFieldWithMaxValueOnly());
         maxValue = PodamTestConstants.NUMBER_INT_ONE_HUNDRED;
         podamValidationSteps.theLongFieldShouldHaveValueNotGreaterThan(pojo.getLongObjectFieldWithMinValueOnly(), maxValue);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getLongObjectFieldWithMinAndMaxValue(), Long.class);
+        podamValidationSteps.theLongObjectFieldShouldNotBeNull(pojo.getLongObjectFieldWithMinAndMaxValue());
         maxValue = PodamTestConstants.NUMBER_INT_MAX_VALUE;
         podamValidationSteps.theLongFieldShouldHaveValueBetween(minValue, maxValue, pojo.getLongObjectFieldWithMinAndMaxValue());
         long preciseValue = Long.valueOf(PodamTestConstants.LONG_PRECISE_VALUE);
         podamValidationSteps.theLongFieldShouldHaveThePreciseValueOf(pojo.getLongFieldWithPreciseValue(), preciseValue);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getLongObjectFieldWithPreciseValue(), Long.class);
+        podamValidationSteps.theLongObjectFieldShouldNotBeNull(pojo.getLongObjectFieldWithPreciseValue());
         podamValidationSteps.theLongFieldShouldHaveThePreciseValueOf(pojo.getLongObjectFieldWithPreciseValue(), preciseValue);
 
     }
@@ -246,12 +243,12 @@ public class AnnotationsTest extends AbstractPodamSteps {
                 .getCharObjectFieldWithMinValueOnly();
         podamValidationSteps.theObjectShouldNotBeNull(charObjectFieldWithMinValueOnly);
         podamValidationSteps.theCharValueShouldBeGreaterOrEqualThan(charObjectFieldWithMinValueOnly,
-                (char) PodamTestConstants.NUMBER_INT_MIN_VALUE);
+                (char)PodamTestConstants.NUMBER_INT_MIN_VALUE);
 
         Character charObjectFieldWithMaxValueOnly = pojo
                 .getCharObjectFieldWithMaxValueOnly();
         podamValidationSteps.theCharValueShouldBeLowerOrEqualThan(charObjectFieldWithMaxValueOnly,
-                PodamTestConstants.NUMBER_INT_ONE_HUNDRED);
+                 PodamTestConstants.NUMBER_INT_ONE_HUNDRED);
 
         Character charObjectFieldWithMinAndMaxValue = pojo
                 .getCharObjectFieldWithMinAndMaxValue();
@@ -425,17 +422,19 @@ public class AnnotationsTest extends AbstractPodamSteps {
         podamValidationSteps.theObjectShouldNotBeNull(pojo);
 
         List<String> strList = pojo.getStrList();
-        podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndShouldHaveExactlyTheExpectedNumberOfElements(
-                strList, String.class, PodamTestConstants.ANNOTATION_COLLECTION_NBR_ELEMENTS);
+        podamValidationSteps.theListShouldNotBeNullAndContainAtLeastOneNonEmptyElement(strList);
+        podamValidationSteps.theListShouldHaveExactlyTheExpectedNumberOfElements(strList,
+                PodamTestConstants.ANNOTATION_COLLECTION_NBR_ELEMENTS);
 
         String[] strArray = pojo.getStrArray();
-        podamValidationSteps.theArrayOfTheGivenTypeShouldNotBeNullOrEmptyAndContainElementsOfTheRightType(strArray, String.class);
-        podamValidationSteps.theArrayShouldHaveExactlyTheExpectedNumberOfElements(strArray,
+        podamValidationSteps.theArrayOfStringsShouldNotBeNullOrEmpty(strArray);
+        podamValidationSteps.theArrayOfStringsShouldHaveExactlyTheExpectedNumberOfElements(strArray,
                 PodamTestConstants.ANNOTATION_COLLECTION_NBR_ELEMENTS);
 
         Map<String, String> stringMap = pojo.getStringMap();
-        podamValidationSteps.theMapShouldNotBeNullOrEmptyAndShouldHaveExactlyTheExpectedNumberOfElements(stringMap,
-                String.class, String.class, PodamTestConstants.ANNOTATION_COLLECTION_NBR_ELEMENTS);
+        podamValidationSteps.theMapShouldContainAtLeastOneNonEmptyElement(stringMap);
+        podamValidationSteps.theMapShouldHaveExactlyTheExpectedNumberOfElements(stringMap,
+                PodamTestConstants.ANNOTATION_COLLECTION_NBR_ELEMENTS);
 
     }
 
@@ -460,38 +459,39 @@ public class AnnotationsTest extends AbstractPodamSteps {
         podamValidationSteps.theStringFieldCannotBeNullOrEmpty(postCode3);
         podamValidationSteps.theStringValueShouldBeExactly(postCode3, PodamTestConstants.POST_CODE);
 
-        podamValidationSteps.theArrayOfTheGivenTypeShouldNotBeNullOrEmptyAndContainExactlyTheGivenNumberOfElements(
-                pojo.getByteData(), ByteArrayStrategy.LENGTH, Byte.class);
+        podamValidationSteps.theArrayOfBytesShouldNotBeNullOrEmpty(pojo.getByteData());
+        podamValidationSteps.theArrayOfBytesShouldBeExactlyOfLength(pojo.getByteData(),
+                ByteArrayStrategy.LENGTH);
 
         Calendar expectedBirthday = PodamTestUtils.getMyBirthday();
         Calendar myBirthday = pojo.getMyBirthday();
         podamValidationSteps.theTwoCalendarObjectsShouldHaveTheSameTime(expectedBirthday, myBirthday);
 
         List<Calendar> myBirthdays = pojo.getMyBirthdays();
-        podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndContainElementsOfType(myBirthdays, GregorianCalendar.class);
+        podamValidationSteps.theListShouldNotBeNullAndContainAtLeastOneNonEmptyElement(myBirthdays);
 
         for (Calendar birthday : myBirthdays) {
             podamValidationSteps.theTwoCalendarObjectsShouldHaveTheSameTime(expectedBirthday, birthday);
         }
 
         Calendar[] myBirthdaysArray = pojo.getMyBirthdaysArray();
-        podamValidationSteps.theArrayOfTheGivenTypeShouldNotBeNullOrEmptyAndContainElementsOfTheRightType(myBirthdaysArray, GregorianCalendar.class);
+        podamValidationSteps.theArrayOfCalendarsShouldNotBeNullOrEmpty(myBirthdaysArray);
 
         for (Calendar birthday : myBirthdaysArray) {
             podamValidationSteps.theTwoCalendarObjectsShouldHaveTheSameTime(expectedBirthday, birthday);
         }
 
         List<Object> objectList = pojo.getObjectList();
-        podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndContainElementsOfType(objectList, Object.class);
+        podamValidationSteps.theListShouldNotBeNullAndContainAtLeastOneNonEmptyElement(objectList);
 
         Object[] myObjectArray = pojo.getMyObjectArray();
-        podamValidationSteps.theArrayOfTheGivenTypeShouldNotBeNullOrEmptyAndContainElementsOfTheRightType(myObjectArray, Object.class);
+        podamValidationSteps.theArrayOfObjectsShouldNotBeNullOrEmpty(myObjectArray);
 
-        List<?> nonGenericObjectList = pojo.getNonGenericObjectList();
-        podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndContainElementsOfType(nonGenericObjectList, Object.class);
+        List nonGenericObjectList = pojo.getNonGenericObjectList();
+        podamValidationSteps.theListShouldNotBeNullAndContainAtLeastOneNonEmptyElement(nonGenericObjectList);
 
         Map<String, Calendar> myBirthdaysMap = pojo.getMyBirthdaysMap();
-        podamValidationSteps.theMapShouldNotBeNullOrEmptyAndContainElementsOfType(myBirthdaysMap, String.class, GregorianCalendar.class);
+        podamValidationSteps.theMapShouldContainAtLeastOneNonEmptyElement(myBirthdaysMap);
 
         Set<String> keySet = myBirthdaysMap.keySet();
         for (String key : keySet) {
@@ -502,28 +502,5 @@ public class AnnotationsTest extends AbstractPodamSteps {
     }
 
 
-    @Test
-    @Title("Podam should handle POJOs with annotated field and setter")
-    public void podamShouldHandlePojosWithAnnotatedFieldAndSetter() throws Exception {
 
-        PodamFactory podamFactory = podamFactorySteps.givenAStandardPodamFactory();
-        AnnotatedFieldAndSetterPojo pojo =
-                podamInvocationSteps.whenIInvokeTheFactoryForClass(AnnotatedFieldAndSetterPojo.class, podamFactory);
-        podamValidationSteps.theObjectShouldNotBeNull(pojo);
-        podamValidationSteps.theStringFieldCannotBeNullOrEmpty(pojo.getPostCode());
-        podamValidationSteps.theStringValueShouldBeExactly(
-                PodamTestConstants.POST_CODE, pojo.getPostCode());
-    }
-
-
-    @Test
-    @Title("Podam should handle POJOs with multiple annotated fields, ignoring any non Podam annotation ")
-    public void podamShouldHandlePojosWithAnnotatedFieldsUsingHibernateConstraintsAnnotations() throws Exception {
-        PodamFactory podamFactory = podamFactorySteps.givenAStandardPodamFactory();
-        SimplePojoWithMultipleAnnotationsToAttribute pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(SimplePojoWithMultipleAnnotationsToAttribute.class, podamFactory);
-        podamValidationSteps.theObjectShouldNotBeNull(pojo);
-        podamValidationSteps.thePojoMustBeOfTheType(pojo.getIntegerWithHibernateAnnotation(), Integer.class);
-        podamValidationSteps.theTwoObjectsShouldBeEqual("stringFieldWithPatternRegex", pojo.getStringFieldWithPatternAnnotation());
-        podamValidationSteps.theTwoObjectsShouldBeEqual("testString", pojo.getStringFieldWithHibernateAnnotation());
-    }
 }

@@ -1,9 +1,9 @@
 package uk.co.jemos.podam.test.unit.steps;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-
 import net.thucydides.core.annotations.Step;
+import org.junit.Assert;
+import uk.co.jemos.podam.test.dto.ValidatedPojo;
+import uk.co.jemos.podam.test.dto.ValidationPojoForStringWithSizeAndNoMax;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
@@ -15,11 +15,23 @@ import java.util.Set;
 public class ValidatorSteps {
 
     @Step("Then the POJO should not have any Validator violations for {1}")
-    public <T> void thePojoShouldNotViolateAnyValidations(Validator validator, T pojo) throws Exception {
+    public void thePojoShouldNotViolateAnyValidationsOnValidatedPojo(Validator validator, ValidatedPojo pojo) throws Exception {
 
-        Set<ConstraintViolation<T>> violations = validator.validate(pojo);
-        assertThat("There should be no violations",
-                violations, is(empty()));
+        Set<ConstraintViolation<ValidatedPojo>> violations = validator.validate(pojo);
+        Assert.assertTrue("Unexpected " + violations.size() + " violations "
+                + violations, violations.isEmpty());
     }
+
+    @Step("Then the POJO should not have any Validator violations")
+    public void thePojoShouldNotViolateAnyValidationsOnValidatedPojoForStringSize(
+            Validator validator,
+            ValidationPojoForStringWithSizeAndNoMax pojo)
+            throws Exception {
+
+        Set<ConstraintViolation<ValidationPojoForStringWithSizeAndNoMax>> violations = validator.validate(pojo);
+        Assert.assertTrue("Unexpected " + violations.size() + " violations "
+                + violations, violations.isEmpty());
+    }
+
 
 }

@@ -2,9 +2,11 @@ package uk.co.jemos.podam.test.unit.features.inheritance;
 
 import net.serenitybdd.junit.runners.SerenityRunner;
 import net.thucydides.core.annotations.Title;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import uk.co.jemos.podam.api.PodamFactory;
+import uk.co.jemos.podam.api.PodamFactoryImpl;
 import uk.co.jemos.podam.test.dto.MultipleInterfacesHolderPojo;
 import uk.co.jemos.podam.test.dto.MultipleInterfacesListPojo;
 import uk.co.jemos.podam.test.dto.MultipleInterfacesMapPojo;
@@ -18,6 +20,20 @@ import java.util.List;
 @RunWith(SerenityRunner.class)
 public class MultipleInterfacesInheritanceTest extends AbstractPodamSteps {
 
+
+	private static final TrackingExternalFactory externalFactory
+			= new TrackingExternalFactory();
+
+	private static final CustomDataProviderStrategy strategy
+			= new CustomDataProviderStrategy();
+
+	private static final PodamFactory factory
+			= new PodamFactoryImpl(externalFactory, strategy);
+
+
+
+
+
 	@Test
 	@Title("Podam cannot instantiate interfaces")
 	public void podamCannotInstantiateInterfaces() throws Exception {
@@ -29,8 +45,7 @@ public class MultipleInterfacesInheritanceTest extends AbstractPodamSteps {
 						podamFactory, String.class);
 		podamValidationSteps.theObjectShouldBeNull(pojo);
 		List<Class<?>> accessed = ((CustomDataProviderStrategy)podamFactory.getStrategy()).getAccessed();
-		podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndShouldHaveExactlyTheExpectedNumberOfElements(
-				accessed, Class.class, 1);
+		podamValidationSteps.theCollectionShouldHaveExactlyTheExpectedNumberOfElements(accessed, 1);
 		podamValidationSteps.theTwoObjectsShouldBeEqual(MultipleInterfacesListPojo.class, accessed.get(0));
 	}
 
@@ -45,8 +60,7 @@ public class MultipleInterfacesInheritanceTest extends AbstractPodamSteps {
 						MultipleInterfacesMapPojo.class, podamFactory, String.class, Long.class);
 		podamValidationSteps.theObjectShouldBeNull(pojo);
 		List<Class<?>> accessed = ((CustomDataProviderStrategy)podamFactory.getStrategy()).getAccessed();
-		podamValidationSteps.theCollectionShouldNotBeNullOrEmptyAndShouldHaveExactlyTheExpectedNumberOfElements(
-				accessed, Class.class, 1);
+		podamValidationSteps.theCollectionShouldHaveExactlyTheExpectedNumberOfElements(accessed, 1);
 		podamValidationSteps.theTwoObjectsShouldBeEqual(MultipleInterfacesMapPojo.class, accessed.get(0));
 	}
 

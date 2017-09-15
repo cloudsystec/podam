@@ -1,29 +1,20 @@
 package uk.co.jemos.podam.test.unit.steps;
 
 import net.thucydides.core.annotations.Step;
-
-import org.junit.Assert;
-
-import uk.co.jemos.podam.api.AbstractClassInfoStrategy;
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.springframework.integration.core.MessagingTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
 import uk.co.jemos.podam.api.ClassAttributeApprover;
 import uk.co.jemos.podam.api.ClassInfo;
-import uk.co.jemos.podam.api.DataProviderStrategy;
 import uk.co.jemos.podam.api.PodamFactory;
+import uk.co.jemos.podam.api.PodamUtils;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
 
 /**
  * Created by tedonema on 27/05/2015.
  */
 public class PodamInvocationSteps {
-
-    private AbstractClassInfoStrategy classInfoStrategy = new AbstractClassInfoStrategy() {};
 
     @Step("When I invoke the factory manufacturing for {0}")
     public <T> T whenIInvokeTheFactoryForClass(Class<T> className, PodamFactory podamFactory) throws Exception {
@@ -31,8 +22,8 @@ public class PodamInvocationSteps {
     }
 
     @Step("When I invoke the pojo's population directly for {0}")
-    public <T> T whenIInvokeThePojoPopulationDirectly(T pojo, PodamFactory podamFactory) throws Exception {
-        return podamFactory.populatePojo(pojo);
+    public <T> T whenIInvokeThePojoPopulationDirectly(T className, PodamFactory podamFactory) throws Exception {
+        return podamFactory.populatePojo(className);
     }
 
     @Step("When I invoke the factory to manufacture {0} with the fullest constructor")
@@ -41,49 +32,21 @@ public class PodamInvocationSteps {
         return podamFactory.manufacturePojoWithFullData(className);
     }
 
-    @Step("When I invoke a method to get class info for class {0} and approver {1}")
+    @Step("When I invoke Podam Utils method to get class info for class {0} and approver {1}")
     public ClassInfo getClassInfo(Class<?> pojoClass, ClassAttributeApprover approver) {
-        return classInfoStrategy.getClassInfo(pojoClass,
-                new HashSet<Class<? extends Annotation>>(),
-                Collections.<String>emptySet(), approver,
-                Collections.<Method>emptySet());
+        return PodamUtils.getClassInfo(pojoClass, approver);
     }
 
-    @Step("When I invoke a method to get class info for class {0} with a custom class strategy {1} and approver {2}")
-    public ClassInfo getClassInfoWithCustomClassStrategy(Class<?> pojoClass,
-            AbstractClassInfoStrategy classStrategy, ClassAttributeApprover approver) {
-        return classStrategy.getClassInfo(pojoClass,
-                new HashSet<Class<? extends Annotation>>(),
-                Collections.<String>emptySet(), approver,
-                Collections.<Method>emptySet());
-    }
-
-    @Step("When I invoke the factory manufacturing for {0} with specific types {2}")
+    @Step("When I invoke Podam for a Generic Pojo specifying the concrete types")
     public <T> T whenIInvokeTheFactoryForGenericTypeWithSpecificType(
             Class<T> pojoClass,
             PodamFactory podamFactory, Type... genericTypeArgs) {
         return podamFactory.manufacturePojo(pojoClass, genericTypeArgs);
     }
 
-    @Step("When I clear memoization cache")
-    public void whenIClearMemoizationCache(PodamFactory podamFactory) {
-        podamFactory.getStrategy().clearMemoizationCache();
-    }
-
-    @Step("When I remove a type manufacturer for a type {1}")
-    public void whenIRemoveTypeManufacturer(PodamFactory podamFactory, Class<?> type) {
-        podamFactory.getStrategy().removeTypeManufacturer(type);
-    }
-
-    @Step("When I request a value for a type {3}")
-    public Object whenISendAMessageToTheChannel(DataProviderStrategy strategy,
-			AttributeMetadata attributeMetadata,
-			Map<String, Type> genericTypesArgumentsMap,
-			Class<?> type) {
-
-        Object payload = strategy.getTypeValue(attributeMetadata,
-                genericTypesArgumentsMap, type);
-        Assert.assertNotNull("Payload must be valid", payload);
-        return payload;
+    @Step("When I send a Message to the channel {0}")
+    public Message whenISendAMessageToTheChannel(MessageChannel inputChannel, Message<? extends Object> message) {
+        MessagingTemplate template = new MessagingTemplate();
+        return template.sendAndReceive(inputChannel, message);
     }
 }

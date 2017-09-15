@@ -24,11 +24,10 @@ public class NonEJBPojoTest extends AbstractPodamSteps {
 		NonEJBClassInfoStrategy classInfoStrategy = podamFactorySteps.givenANonEJBClassInfoStrategy();
 
 		PodamFactory podamFactory = podamFactorySteps.givenAPodamFactoryWithCustomClassInfoStrategy(classInfoStrategy);
-		podamValidationSteps.theTwoObjectsShouldBeEqual(podamFactory.getClassStrategy(), classInfoStrategy);
 
 		NonEJBPojo pojo = podamInvocationSteps.whenIInvokeTheFactoryForClass(NonEJBPojo.class, podamFactory);
-		podamValidationSteps.thePojoMustBeOfTheType(pojo, NonEJBPojo.class);
+		podamValidationSteps.theObjectShouldNotBeNull(pojo);
 		podamValidationSteps.theStringFieldCannotBeNullOrEmpty(pojo.getMyString());
-		podamValidationSteps.thePojoMustBeOfTheType(pojo.getMyLong(), Long.class);
+		podamValidationSteps.theObjectShouldNotBeNull(pojo.getMyLong());
 	}
 }
