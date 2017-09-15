@@ -39,9 +39,9 @@ public class ConstructorWithSelfReferencesButNoDefaultConstructorPojo implements
 	// ------------------->> Constructors
 
 	/**
-	 * @param intField The int field
-	 * @param parent The parent object
-	 * @param anotherParent Another parent
+	 * @param intField
+	 * @param parent
+	 * @param anotherParent
 	 */
 	public ConstructorWithSelfReferencesButNoDefaultConstructorPojo(
 			int intField,

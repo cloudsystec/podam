@@ -4,29 +4,43 @@
 package uk.co.jemos.podam.test.dto;
 
 import java.io.Serializable;
+import java.util.List;
+
+import uk.co.jemos.podam.common.PodamConstructor;
 
 /**
+ * A Pojo to test constructors with collections as arguments
+ * 
  * @author mtedone
  * 
  */
-public class NoDefaultConstructorPojo implements Serializable {
+public class NoSetterWithCollectionInConstructorPojo implements Serializable {
 
 	// ------------------->> Constants
-
 	private static final long serialVersionUID = 1L;
 
 	// ------------------->> Instance / Static variables
 
+	/** A list of strings */
+	private final List<String> strList;
+
 	/** An int field */
-	private int intField;
+	private final int intField;
 
 	// ------------------->> Constructors
-
 	/**
+	 * Full constructor
+	 * 
+	 * @param strList
+	 *            A list of Strings
 	 * @param intField
+	 *            An int field
 	 */
-	public NoDefaultConstructorPojo(int intField) {
+	@PodamConstructor
+	public NoSetterWithCollectionInConstructorPojo(List<String> strList,
+			int intField) {
 		super();
+		this.strList = strList;
 		this.intField = intField;
 	}
 
@@ -35,18 +49,17 @@ public class NoDefaultConstructorPojo implements Serializable {
 	// ------------------->> Getters / Setters
 
 	/**
+	 * @return the strList
+	 */
+	public List<String> getStrList() {
+		return strList;
+	}
+
+	/**
 	 * @return the intField
 	 */
 	public int getIntField() {
 		return intField;
-	}
-
-	/**
-	 * @param intField
-	 *            the intField to set
-	 */
-	public void setIntField(int intField) {
-		this.intField = intField;
 	}
 
 	// ------------------->> Private methods
@@ -65,8 +78,10 @@ public class NoDefaultConstructorPojo implements Serializable {
 
 		StringBuilder retValue = new StringBuilder();
 
-		retValue.append("NoDefaultConstructorPojo ( ").append("intField = ")
-				.append(intField).append(TAB).append(" )");
+		retValue.append("NoSetterWithCollectionInConstructorPojo ( ")
+				.append("strList = ").append(strList).append(TAB)
+				.append("intField = ").append(intField).append(TAB)
+				.append(" )");
 
 		return retValue.toString();
 	}

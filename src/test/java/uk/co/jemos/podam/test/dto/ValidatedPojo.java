@@ -5,17 +5,12 @@ package uk.co.jemos.podam.test.dto;
 
 
 import org.hibernate.validator.constraints.Email;
-import org.hibernate.validator.constraints.NotBlank;
-import org.hibernate.validator.constraints.NotEmpty;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.validation.constraints.AssertFalse;
 import javax.validation.constraints.AssertTrue;
@@ -50,12 +45,6 @@ public class ValidatedPojo {
 
 	@Null
 	private String emptyString;
-
-	@NotEmpty
-	private String notEmptyString;
-
-	@NotBlank
-	private String notBlankString;
 
 	@DecimalMin("-5.5")
 	@DecimalMax("5.5")
@@ -109,11 +98,6 @@ public class ValidatedPojo {
 
 	@Size(min = 2)
 	private Collection<String> minCollection;
-
-	@Size(min = 1, max = 3)
-	private Collection<String> defaultCollection = new ArrayList<String>();
-
-	private Map<String, String> defaultMap = new HashMap<String, String>();
 
 	@Pattern(regexp = "^[a-zA-Z0-9_]*$")
 	private String identifier;
@@ -171,22 +155,6 @@ public class ValidatedPojo {
 
 	public void setEmptyString(String emptyString) {
 		this.emptyString = emptyString;
-	}
-
-	public String getNotEmptyString() {
-		return notEmptyString;
-	}
-
-	public void setNotEmptyString(String notEmptyString) {
-		this.notEmptyString = notEmptyString;
-	}
-
-	public String getNotBlankString() {
-		return notBlankString;
-	}
-
-	public void setNotBlankString(String notBlankString) {
-		this.notBlankString = notBlankString;
 	}
 
 	public String getDecimalString() {
@@ -315,15 +283,6 @@ public class ValidatedPojo {
 
 	public void setMinCollection(Collection<String> minCollection) {
 		this.minCollection = minCollection;
-	}
-
-	public Collection<String> getDefaultCollection() {
-		return defaultCollection;
-	}
-
-	@Size(min = 1, max = 3)
-	public Map<String,String> getDefaultMap() {
-		return defaultMap;
 	}
 
 	public String getIdentifier() {
