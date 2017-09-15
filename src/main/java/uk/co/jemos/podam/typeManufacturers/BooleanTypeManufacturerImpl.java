@@ -1,11 +1,11 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
 import uk.co.jemos.podam.common.PodamBooleanValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default boolean type manufacturer.
@@ -14,39 +14,38 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class BooleanTypeManufacturerImpl extends AbstractTypeManufacturer<Boolean> {
+public class BooleanTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(BooleanTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Boolean getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Boolean getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Boolean retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamBooleanValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamBooleanValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
-            retValue = annotationStrategy.boolValue();
-        } else {
-            retValue = getBoolean(attributeMetadata);
+        Boolean retValue = null;
+
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
+
+            if (PodamBooleanValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamBooleanValue localStrategy = (PodamBooleanValue) annotation;
+                retValue = localStrategy.boolValue();
+
+                break;
+            }
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getBoolean(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-	/** It returns a boolean/Boolean value.
-	 * 
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return a boolean/Boolean value
-	 */
-	public Boolean getBoolean(AttributeMetadata attributeMetadata) {
-
-		return Boolean.TRUE;
-	}
 
 }

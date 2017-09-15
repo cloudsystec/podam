@@ -1,53 +1,45 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import java.util.Collection;
 
-import uk.co.jemos.podam.api.PodamUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Parent of all type manufacturer.
  *
  * Created by tedonema on 28/06/2015.
  *
- * @param <T> The type of the value to be manufactured
  * @since 6.0.0.RELEASE
  */
-public abstract class AbstractTypeManufacturer<T> implements TypeManufacturer<T> {
+public abstract class AbstractTypeManufacturer implements TypeManufacturer {
 
-	/**
-	 * @param <R> The type for which should be found
 
-	 * @param collection collection with elements
-	 * @param type a type of which element should be found
-	 * @return element of desired type or null, if the collection doesn't
-	 * contain any object of that type.
-	 */
-	public <R> R findElementOfType(Collection<?> collection, Class<R> type) {
-		for (Object element : collection) {
-			if (type.isInstance(element)) {
-				return type.cast(element);
-			}
-		}
-		return null;
-	}
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractTypeManufacturer.class);
 
-    /** It returns a int/Integer value in an interval (0, bound).
-	 *
-	 * @param bound
-	 *            the upper bound (exclusive). Must be positive.
-	 * @return A random int value.
-	 */
-	public int getInteger(int bound) {
+    /**
+     * Checks that the given wrapper is valid.
+     * @param wrapper The wrapper to be checked
+     *
+     * @throws IllegalArgumentException If the wrapper or its content is invalid
+     */
+    protected void checkWrapperIsValid(TypeManufacturerParamsWrapper wrapper) {
 
-		return PodamUtils.getIntegerInRange(0, bound);
-	}
+        String errMsg = null;
 
-	/** It returns a double value in an interval (0, 1.0)
-	 * 
-	 * @return A random double value
-	 */
-	public double getDouble() {
+        if (null == wrapper) {
+            errMsg = "The wrapper cannot be null";
+            throw new IllegalArgumentException(errMsg);
+        }
 
-		return PodamUtils.getDoubleInRange(0.0, 1.0);
-	}
+        if (null == wrapper.getAttributeMetadata()) {
+            errMsg = "The attribute metadata inside the wrapper cannot be null";
+            throw new IllegalArgumentException(errMsg);
+        }
+
+        if (null == wrapper.getAttributeMetadata().getAttributeAnnotations()) {
+            errMsg = "The annotations list within the attribute metadata cannot be null, although it can be empty";
+            throw new IllegalArgumentException(errMsg);
+        }
+    }
 }

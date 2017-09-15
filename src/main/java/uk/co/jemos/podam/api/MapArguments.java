@@ -2,6 +2,7 @@ package uk.co.jemos.podam.api;
 
 import java.io.Serializable;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 
 /**
  * Pojo which contains the arguments required to fill a Map as a POJO attribute
@@ -12,6 +13,9 @@ import java.lang.reflect.Type;
 public class MapArguments extends AbstractMapArguments implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	/** The type of the Map key. */
+	private Class<?> keyClass;
 
 	/** The type of the Map element. */
 	private Class<?> elementClass;
@@ -26,6 +30,21 @@ public class MapArguments extends AbstractMapArguments implements Serializable {
 	 * instance.
 	 */
 	private Type[] elementGenericTypeArgs;
+
+	/**
+	 * @return the keyClass
+	 */
+	public Class<?> getKeyClass() {
+		return keyClass;
+	}
+
+	/**
+	 * @param keyClass
+	 *            the keyClass to set
+	 */
+	public void setKeyClass(Class<?> keyClass) {
+		this.keyClass = keyClass;
+	}
 
 	/**
 	 * @return the elementClass
@@ -70,6 +89,26 @@ public class MapArguments extends AbstractMapArguments implements Serializable {
 	 */
 	public void setElementGenericTypeArgs(Type[] elementGenericTypeArgs) {
 		this.elementGenericTypeArgs = elementGenericTypeArgs.clone();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public String toString() {
+		StringBuilder builder = new StringBuilder();
+		builder.append("MapArguments [toString()=");
+		builder.append(super.toString());
+		builder.append(", keyClass=");
+		builder.append(keyClass);
+		builder.append(", elementClass=");
+		builder.append(elementClass);
+		builder.append(", keyGenericTypeArgs=");
+		builder.append(Arrays.toString(keyGenericTypeArgs));
+		builder.append(", elementGenericTypeArgs=");
+		builder.append(Arrays.toString(elementGenericTypeArgs));
+		builder.append("]");
+		return builder.toString();
 	}
 
 }

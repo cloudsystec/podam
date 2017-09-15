@@ -4,13 +4,10 @@
 package uk.co.jemos.podam.api;
 
 import uk.co.jemos.podam.common.AttributeStrategy;
-import uk.co.jemos.podam.typeManufacturers.TypeManufacturer;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.util.Map;
 
 /**
  * This interface defines the contact for PODAM data providers.
@@ -31,47 +28,7 @@ import java.util.Map;
  */
 public interface DataProviderStrategy {
 
-    /**
-     * Registers @TypeManufacturer implementation, which will be used to
-     * instantiate objects of a specified type. Use this to alter factory
-     * behaviour.
-     *
-     * @param <T> type of objects to be produced by the manufacturer
-     * @param type
-     *            the specific class type the specified manufacturer
-     *            will instantiate.
-     * @param typeManufacturer
-     *            type manufacturer implementation to be registered
-     * @return itself
-     */
-    <T> DataProviderStrategy addOrReplaceTypeManufacturer(
-            Class<? extends T> type, TypeManufacturer<T> typeManufacturer);
-
-    /**
-     * Remove binding of a class type to a specific
-     * implementation of type manufacturer
-     *
-     * @param <T> type of objects to be produced by the manufacturer
-     * @param type
-     *            the specific class type to remove binding
-     * @return itself
-     */
-    <T> DataProviderStrategy removeTypeManufacturer(
-           Class<T> type);
-
-    /**
-     * Obtains a type value
-     *
-     * @param <T> type of returned object
-     * @param attributeMetadata The AttributeMetadata information
-     * @param genericTypesArgumentsMap The generic attribute type argument types
-     * @param pojoType The class of the requested type
-     * @return The type value
-     */
-    <T> T getTypeValue(AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap, Class<T> pojoType);
-
-    /**
+	/**
      * Bind an interface/abstract class to a specific implementation. If the
      * strategy previously contained a binding for the interface/abstract class,
      * the old value will be replaced by the new value.
@@ -113,6 +70,187 @@ public interface DataProviderStrategy {
 		 */
 		LIGHT_FIRST
 	};
+
+	/** It returns a boolean/Boolean value.
+	 * 
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return a boolean/Boolean value
+	 */
+	Boolean getBoolean(AttributeMetadata attributeMetadata);
+
+	/** It returns a byte/Byte value.
+	 * 
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return a boolean/Boolean value
+	 */
+	Byte getByte(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a byte/Byte within min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A byte/Byte within min and max value (included).
+	 */
+	Byte getByteInRange(byte minValue, byte maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a char/Character value.
+	 * 
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return a char/Character value
+	 */
+	Character getCharacter(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a char/Character value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A char/Character value between min and max value (included).
+	 */
+	Character getCharacterInRange(char minValue, char maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a double/Double value
+	 *
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return a double/Double value
+	 */
+	Double getDouble(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a double/Double value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A double/Double value between min and max value (included)
+	 */
+	Double getDoubleInRange(double minValue, double maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a float/Float value.
+	 * 
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A float/Float value
+	 */
+	Float getFloat(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a float/Float value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A float/Float value between min and max value (included).
+	 */
+	Float getFloatInRange(float minValue, float maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns an int/Integer value.
+	 *
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A int/Integer value
+	 */
+	Integer getInteger(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns an int/Integer value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return An int/Integer value between min and max value (included).
+	 */
+	int getIntegerInRange(int minValue, int maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a long/Long value.
+	 *
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A long/Long value
+	 * */
+	Long getLong(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a long/Long value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A long/Long value between min and max value (included).
+	 */
+	Long getLongInRange(long minValue, long maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a short/Short value.
+	 *
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A short/Short value.
+	 */
+	Short getShort(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a short/Short value between min and max value (included).
+	 * 
+	 * @param minValue
+	 *            The minimum value for the returned value
+	 * @param maxValue
+	 *            The maximum value for the returned value
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A short/Short value between min and max value (included).
+	 */
+	Short getShortInRange(short minValue, short maxValue,
+			AttributeMetadata attributeMetadata);
+
+	/** It returns a string value
+	 * 
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A String of default length
+	 */
+	String getStringValue(AttributeMetadata attributeMetadata);
+
+	/**
+	 * It returns a String of {@code length} characters.
+	 * 
+	 * @param length
+	 *            The number of characters required in the returned String
+	 * @param attributeMetadata
+	 *            attribute metadata for instance to be fetched
+	 * @return A String of {@code length} characters
+	 */
+	String getStringOfLength(int length, AttributeMetadata attributeMetadata);
 
 	/**
 	 * Returns the number of default collection elements.
@@ -220,20 +358,6 @@ public interface DataProviderStrategy {
 	void sort(Method[] methods, Order order);
 
 	/**
-	 * Resolves factory classes for abstract classes and interfaces.
-	 * <p>
-	 * Should return factory class type, which can be used to instantiate
-	 * an abstract class type or interface.
-	 * </p>
-	 * 
-	 * @param nonInstantiatableClass
-	 *            Abstract class type or interface
-	 * @return Non-abstract factory class type to instantiate
-	 *         {@code nonInstantiatableClass}.
-	 */
-	Class<?> getFactoryClass(Class<?> nonInstantiatableClass);
-
-	/**
 	 * Resolves abstract classes and interfaces.
 	 * <p>
 	 * Should return specific class type, which can be instantiated and assigned
@@ -260,6 +384,6 @@ public interface DataProviderStrategy {
 	 *        Annotation class to inspect
 	 * @return attribute strategy associated with given annotation
 	 */
-	AttributeStrategy<?> getStrategyForAnnotation(Class<? extends Annotation> annotationClass);
+	Class<AttributeStrategy<?>> getStrategyForAnnotation(Class<? extends Annotation> annotationClass);
 
 }

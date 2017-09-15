@@ -14,7 +14,7 @@ import java.lang.reflect.Type;
  * @since 1.0.0
  * 
  */
-public interface PodamConstants {
+public final class PodamConstants {
 
 	/**
 	 * The default string length that Podam will assign to an annotated
@@ -28,6 +28,9 @@ public interface PodamConstants {
 	/** The default encoding for Strings. */
 	public static final String STR_DEFAULT_ENCODING = "UTF-8";
 
+    /** The Spring integration header name which will drive the type manufacturing. */
+    public static final String HEADER_NAME = "type";
+
     /** The Podam Spring rool configuration file name. */
     public static final String SPRING_ROOT_CONFIG_LOCATION = "META-INF/spring/podam-config.xml";
 
@@ -39,5 +42,17 @@ public interface PodamConstants {
 
     /** An empty object array. */
     public static final Object[] NO_ARGS = new Object[0];
+
+    /** The Enumeration qualifier for the Message Channel. */
+    public static final String ENUMERATION_QUALIFIER = "Enumeration";
+
+    /** The Generic Type qualifier for the Message Channel. */
+    public static final String GENERIC_TYPE_QUALIFIER = "GenericType";
+
+    /** Non-instantiable constructor */
+	private PodamConstants() {
+		throw new AssertionError("Non instantiable");
+	}
+
 
 }

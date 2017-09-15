@@ -1,15 +1,12 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import org.apache.commons.lang3.StringUtils;
-
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamConstants;
 import uk.co.jemos.podam.common.PodamLongValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default int type manufacturer.
@@ -18,79 +15,64 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class LongTypeManufacturerImpl extends AbstractTypeManufacturer<Long> {
+public class LongTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(LongTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Long getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Long getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Long retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamLongValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamLongValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
+        Long retValue = null;
 
-            String numValueStr = annotationStrategy.numValue();
-            if (StringUtils.isNotEmpty(numValueStr)) {
-                try {
-                    retValue = Long.valueOf(numValueStr);
-                } catch (NumberFormatException nfe) {
-                    throw new IllegalArgumentException(PodamConstants.THE_ANNOTATION_VALUE_STR
-                            + numValueStr
-                            + " could not be converted to a Long. An exception will be thrown.",
-                            nfe);
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
+
+            if (PodamLongValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamLongValue longStrategy = (PodamLongValue) annotation;
+
+                String numValueStr = longStrategy.numValue();
+                if (null != numValueStr && !"".equals(numValueStr)) {
+                    try {
+                        retValue = Long.valueOf(numValueStr);
+                    } catch (NumberFormatException nfe) {
+                        String errMsg = PodamConstants.THE_ANNOTATION_VALUE_STR
+                                + numValueStr
+                                + " could not be converted to a Long. An exception will be thrown.";
+                        LOG.error(errMsg);
+                        throw new IllegalArgumentException(errMsg, nfe);
+                    }
+                } else {
+
+                    long minValue = longStrategy.minValue();
+                    long maxValue = longStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getLongInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
+
                 }
-            } else {
 
-                long minValue = annotationStrategy.minValue();
-                long maxValue = annotationStrategy.maxValue();
+                break;
 
-                // Sanity check
-                if (minValue > maxValue) {
-                   maxValue = minValue;
-                }
-
-                retValue = getLongInRange(minValue, maxValue,
-                        attributeMetadata);
             }
-        } else {
-            retValue = getLong(attributeMetadata);
+
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getLong(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-    /** It returns a long/Long value.
-	 *
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A long/Long value
-	 * */
-	public Long getLong(AttributeMetadata attributeMetadata) {
-
-		return System.nanoTime();
-	}
-
-	/**
-	 * It returns a long/Long value between min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A long/Long value between min and max value (included).
-	 */
-	public Long getLongInRange(long minValue, long maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return PodamUtils.getLongInRange(minValue, maxValue);
-	}
-
 }

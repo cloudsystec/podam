@@ -1,15 +1,12 @@
 package uk.co.jemos.podam.typeManufacturers;
 
 
-import org.apache.commons.lang3.StringUtils;
-
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamByteValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default byte type manufacturer.
@@ -18,79 +15,63 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class ByteTypeManufacturerImpl extends AbstractTypeManufacturer<Byte> {
+public class ByteTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(ByteTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Byte getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Byte getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Byte retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamByteValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamByteValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
+        Byte retValue = null;
 
-            String numValueStr = annotationStrategy.numValue();
-            if (StringUtils.isNotEmpty(numValueStr)) {
-                try {
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
 
-                    retValue = Byte.valueOf(numValueStr);
-                } catch (NumberFormatException nfe) {
-                    throw new IllegalArgumentException("The precise value: "
-                            + numValueStr
-                            + " cannot be converted to a byte type. An exception will be thrown.",
-                            nfe);
+            if (PodamByteValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamByteValue intStrategy = (PodamByteValue) annotation;
+
+                String numValueStr = intStrategy.numValue();
+                if (null != numValueStr && !"".equals(numValueStr)) {
+                    try {
+
+                        retValue = Byte.valueOf(numValueStr);
+
+                    } catch (NumberFormatException nfe) {
+                        String errMsg = "The precise value: "
+                                + numValueStr
+                                + " cannot be converted to a byte type. An exception will be thrown.";
+                        LOG.error(errMsg);
+                        throw new IllegalArgumentException(errMsg, nfe);
+                    }
+                } else {
+                    byte minValue = intStrategy.minValue();
+                    byte maxValue = intStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getByteInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
                 }
-            } else {
-                byte minValue = annotationStrategy.minValue();
-                byte maxValue = annotationStrategy.maxValue();
 
-                // Sanity check
-                if (minValue > maxValue) {
-                    maxValue = minValue;
-                }
+                break;
 
-                retValue = getByteInRange(minValue, maxValue,
-                        attributeMetadata);
             }
-        } else {
-            retValue = getByte(attributeMetadata);
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getByte(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-	/** It returns a byte/Byte value.
-	 * 
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return a boolean/Boolean value
-	 */
-	public Byte getByte(AttributeMetadata attributeMetadata) {
-
-		return (byte)getInteger(Byte.MAX_VALUE);
-	}
-
-	/**
-	 * It returns a byte/Byte within min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A byte/Byte within min and max value (included).
-	 */
-	public Byte getByteInRange(byte minValue, byte maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return (byte)PodamUtils.getIntegerInRange(minValue, maxValue);
-	}
-
 }

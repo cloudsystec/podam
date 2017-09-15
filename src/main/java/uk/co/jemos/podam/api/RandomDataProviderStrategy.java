@@ -15,33 +15,6 @@ import java.lang.annotation.Annotation;
  */
 public interface RandomDataProviderStrategy extends DataProviderStrategy {
 
-	/**
-	 * Binds an interface/abstract class to its factory. If the
-	 * strategy previously contained a binding for the interface/abstract class,
-	 * the old value is replaced by the new value. If you want to implement
-	 * more sophisticated binding strategy, override this class.
-	 *
-	 * @param <T> return type
-	 * @param abstractClass
-	 *            the interface/abstract class to bind
-	 * @param factoryClass
-	 *            factory class for instantiation of
-	 *            {@code abstractClass}.
-	 * @return itself
-	 */
-	<T> AbstractRandomDataProviderStrategy addOrReplaceFactory(
-			final Class<T> abstractClass, final Class<?> factoryClass);
-
-	/**
-	 * Remove binding of an interface/abstract class to its factory
-	 *
-	 * @param <T> return type
-	 * @param abstractClass
-	 *            the interface/abstract class to remove binding
-	 * @return itself
-	 */
-	<T> AbstractRandomDataProviderStrategy removeFactory(
-			final Class<T> abstractClass);
 
     /**
      * Bind an annotation to attribute strategy class. If the
@@ -52,13 +25,13 @@ public interface RandomDataProviderStrategy extends DataProviderStrategy {
      *
      * @param annotationClass
      *            the annotation class
-     * @param attributeStrategy
-     *            the attribute strategy
+     * @param strategyClass
+     *            the attribute strategy class
      * @return itself
      */
     RandomDataProviderStrategy addOrReplaceAttributeStrategy(
             Class<? extends Annotation> annotationClass,
-            AttributeStrategy<?> attributeStrategy);
+            Class<AttributeStrategy<?>> strategyClass);
 
     /**
      * Remove binding of an annotation to attribute strategy

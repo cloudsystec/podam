@@ -1,11 +1,9 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import java.lang.reflect.Type;
-import java.util.Map;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.AttributeMetadata;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 
 /**
  * Default Enum type manufacturer.
@@ -14,29 +12,35 @@ import uk.co.jemos.podam.api.PodamUtils;
  *
  * @since 6.0.0.RELEASE
  */
-public class EnumTypeManufacturerImpl extends AbstractTypeManufacturer<Enum<?>> {
+public class EnumTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(EnumTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Enum<?> getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Object getType(TypeManufacturerParamsWrapper wrapper) {
+
+        super.checkWrapperIsValid(wrapper);
+
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
+
+        AttributeMetadata attributeMetadata = wrapper.getAttributeMetadata();
 
         Class<?> realAttributeType = attributeMetadata.getAttributeType();
 
-        Object[] enumConstants = realAttributeType.getEnumConstants();
-        if (null == enumConstants) {
-            enumConstants = Thread.State.class.getEnumConstants();
-        }
+        Object retValue = null;
 
-        Enum<?> retValue = null;
-        final int enumConstantsLength = enumConstants.length;
+        // Enum type
+        int enumConstantsLength = realAttributeType.getEnumConstants().length;
+
         if (enumConstantsLength > 0) {
-            int enumIndex = PodamUtils.getIntegerInRange(0, enumConstantsLength)
+            int enumIndex = strategy.getIntegerInRange(0,
+                    enumConstantsLength, attributeMetadata)
                     % enumConstantsLength;
-            retValue = (Enum<?>) enumConstants[enumIndex];
+            retValue = realAttributeType.getEnumConstants()[enumIndex];
         }
 
         return retValue;

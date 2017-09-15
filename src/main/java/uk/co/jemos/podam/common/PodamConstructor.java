@@ -18,7 +18,6 @@ import java.lang.annotation.Target;
  * 
  */
 @Documented
-@PodamAnnotation
 @Target({ElementType.CONSTRUCTOR, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface PodamConstructor {

@@ -1,12 +1,11 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamCharValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default character type manufacturer.
@@ -15,69 +14,56 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class CharTypeManufacturerImpl extends AbstractTypeManufacturer<Character> {
+public class CharTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(CharTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Character getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Character getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Character retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamCharValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamCharValue.class);
-        if (null != annotationStrategy) {
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-            retValue = annotationStrategy.charValue();
-            if (retValue == ' ') {
+        Character retValue = null;
 
-                char minValue = annotationStrategy.minValue();
-                char maxValue = annotationStrategy.maxValue();
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
 
-                // Sanity check
-                if (minValue > maxValue) {
-                    maxValue = minValue;
+            if (PodamCharValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamCharValue annotationStrategy = (PodamCharValue) annotation;
+
+                char charValue = annotationStrategy.charValue();
+                if (charValue != ' ') {
+                    retValue = charValue;
+
+                } else {
+
+                    char minValue = annotationStrategy.minValue();
+                    char maxValue = annotationStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getCharacterInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
+
                 }
 
-                retValue = getCharacterInRange(minValue, maxValue,
-                        attributeMetadata);
+                break;
+
             }
-        } else {
-            retValue = getCharacter(attributeMetadata);
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getCharacter(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-	/** It returns a char/Character value.
-	 * 
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return a char/Character value
-	 */
-	public Character getCharacter(AttributeMetadata attributeMetadata) {
-
-		return PodamUtils.getNiceCharacter();
-	}
-
-	/**
-	 * It returns a char/Character value between min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A char/Character value between min and max value (included).
-	 */
-	public Character getCharacterInRange(char minValue, char maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return (char)PodamUtils.getIntegerInRange(minValue, maxValue);
-	}
-
 }

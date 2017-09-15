@@ -3,6 +3,7 @@
  */
 package uk.co.jemos.podam.common;
 
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.PodamUtils;
@@ -15,6 +16,7 @@ import java.math.BigInteger;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,6 +33,12 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 
 	private static final Logger LOG = LoggerFactory.getLogger(BeanValidationStrategy.class);
 
+	/** A RANDOM generator */
+	private static final Random RANDOM = new Random(System.currentTimeMillis());
+
+	/** bean validation annotations */
+	private List<Annotation> annotations;
+
 	/** expected return type of an attribute */
 	private Class<?> attributeType;
 
@@ -39,10 +47,13 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 	/**
 	 * Constructor for the strategy
 	 *
+	 * @param annotations
+	 *        bean validation annotations
 	 * @param attributeType
 	 *        expected return type of an attribute
 	 */
-	public BeanValidationStrategy(Class<?> attributeType) {
+	public BeanValidationStrategy(List<Annotation> annotations, Class<?> attributeType) {
+		this.annotations = annotations;
 		this.attributeType = attributeType;
 	}
 
@@ -56,7 +67,7 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 	 * 
 	 * {@inheritDoc}
 	 */
-	public Object getValue(Class<?> attrType, List<Annotation> annotations) throws PodamMockeryException {
+	public Object getValue() throws PodamMockeryException {
 
 		if (null != findTypeFromList(annotations, AssertTrue.class)) {
 
@@ -70,27 +81,84 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 
 		if (null != findTypeFromList(annotations, Past.class)) {
 
-			int days = PodamUtils.getIntegerInRange(1, 365);
+			int days = RANDOM.nextInt(365) + 1;
 			long timestamp = System.currentTimeMillis() - TimeUnit.DAYS.toSeconds(days);
 			return timestampToReturnType(timestamp);
 		}
 
 		if (null != findTypeFromList(annotations, Future.class)) {
 
-			int days = PodamUtils.getIntegerInRange(1, 365);
+			int days = RANDOM.nextInt(365) + 1;
 			long timestamp = System.currentTimeMillis() + TimeUnit.DAYS.toSeconds(days);
 			return timestampToReturnType(timestamp);
 		}
 
-		Size size = findTypeFromList(annotations, Size.class);
-		if (null != size) {
+		Annotation minAnno = null;
+		Annotation maxAnno = null;
+
+		minAnno = findTypeFromList(annotations, DecimalMin.class);
+		maxAnno = findTypeFromList(annotations, DecimalMax.class);
+		if ((null != minAnno) || (null != maxAnno)) {
+
+			BigDecimal min;
+			if (null != minAnno) {
+				DecimalMin tmp = (DecimalMin) minAnno;
+				min = new BigDecimal(tmp.value());
+			} else {
+				min = new BigDecimal(Double.MIN_VALUE);
+			}
+			BigDecimal max;
+			if (null != maxAnno) {
+				DecimalMax tmp = (DecimalMax) maxAnno;
+				max = new BigDecimal(tmp.value());
+			} else {
+				max = new BigDecimal(Double.MAX_VALUE);
+			}
+			return decimalToReturnType(getValueInRange(min, max));
+		}
+
+		minAnno = findTypeFromList(annotations, Min.class);
+		maxAnno = findTypeFromList(annotations, Max.class);
+		if ((null != minAnno) || (null != maxAnno)) {
+
+			BigDecimal min;
+			if (null != minAnno) {
+				Min tmp = (Min) minAnno;
+				min = new BigDecimal(tmp.value());
+			} else {
+				min = new BigDecimal(Double.MIN_VALUE);
+			}
+			BigDecimal max;
+			if (null != maxAnno) {
+				Max tmp = (Max) maxAnno;
+				max = new BigDecimal(tmp.value());
+			} else {
+				max = new BigDecimal(Double.MAX_VALUE);
+			}
+			/* Integer part */
+			BigInteger intValue = getValueInRange(min, max).toBigInteger();
+			BigDecimal value = new BigDecimal(intValue);
+			return decimalToReturnType(value);
+		}
+
+		if (null != (minAnno = findTypeFromList(annotations, Digits.class))) {
+
+			Digits digits = (Digits) minAnno;
+			BigDecimal divisor = BigDecimal.TEN.pow(digits.fraction());
+			BigDecimal max = BigDecimal.TEN.pow(digits.integer()).multiply(divisor);
+			BigDecimal min = max.negate();
+			/* Integer part */
+			BigInteger intValue = getValueInRange(min, max).toBigInteger();
+			BigDecimal value = new BigDecimal(intValue).divide(divisor);
+			return decimalToReturnType(value);
+		}
+
+		if (null != (minAnno = findTypeFromList(annotations, Size.class))) {
+
+			Size size = (Size) minAnno;
 
 			int minValue = size.min();
 			int maxValue = size.max();
-
-			if (minValue < 1 && maxValue > 0) {
-				minValue = 1;
-			}
 
 			if (maxValue == Integer.MAX_VALUE) {
 				maxValue = PodamConstants.STR_DEFAULT_LENGTH;
@@ -106,69 +174,13 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 
 		}
 
-		Pattern pattern = findTypeFromList(annotations, Pattern.class);
-		if (null != pattern) {
+		if (null != (minAnno = findTypeFromList(annotations, Pattern.class))) {
 
+			Pattern pattern = (Pattern) minAnno;
 			LOG.warn("At the moment PODAM doesn't support @Pattern({}),"
 					+ " returning null", pattern.regexp());
 			return null;
 
-		}
-
-		boolean isRound = false;
-		boolean isFloat = false;
-		BigDecimal min = new BigDecimal(-Double.MAX_VALUE);
-		BigDecimal max = new BigDecimal(Double.MAX_VALUE);
-
-		DecimalMin decimalMin = findTypeFromList(annotations, DecimalMin.class);
-		if (null != decimalMin) {
-			isFloat = true;
-			min = new BigDecimal(decimalMin.value());
-		}
-
-		DecimalMax decimalMax = findTypeFromList(annotations, DecimalMax.class);
-		if (null != decimalMax) {
-			isFloat = true;
-			max = new BigDecimal(decimalMax.value());
-		}
-
-		Min minAnno = findTypeFromList(annotations, Min.class);
-		if (null != minAnno) {
-			isRound = true;
-			min = new BigDecimal(minAnno.value()).max(min);
-		}
-
-		Max maxAnno = findTypeFromList(annotations, Max.class);
-		if (null != maxAnno) {
-			isRound = true;
-			max = new BigDecimal(maxAnno.value()).min(max);
-		}
-
-		Digits digits = findTypeFromList(annotations, Digits.class);
-		BigDecimal divisor = null;
-		if (null != digits) {
-			isRound = true;
-			divisor = BigDecimal.TEN.pow(digits.fraction());
-			BigDecimal limit = BigDecimal.TEN.pow(digits.integer());
-			max = limit.min(max).multiply(divisor);
-			min = limit.negate().max(min).multiply(divisor);
-		}
-
-		if (isRound || isFloat) {
-			BigDecimal value = getValueInRange(min, max);
-
-			if (isRound) {
-
-				/* Integer part */
-				BigInteger intValue = value.toBigInteger();
-				value = new BigDecimal(intValue);
-			}
-
-			if (null != divisor) {
-				value = value.divide(divisor);
-			}
-
-			return decimalToReturnType(value);
 		}
 
 		return null;
@@ -188,13 +200,12 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 	 * @return
 	 *        First element from the list of desired type
 	 */
-	public static <T> T findTypeFromList(List<?> list, Class<T> type) {
+	@SuppressWarnings("unchecked")
+	private static <T> T findTypeFromList(List<?> list, Class<T> type) {
 
 		for (Object item : list) {
 			if (type.isAssignableFrom(item.getClass())) {
-				@SuppressWarnings("unchecked")
-				T found = (T)item;
-				return found;
+				return (T)item;
 			}
 		}
 		return null;
@@ -212,7 +223,7 @@ public class BeanValidationStrategy implements AttributeStrategy<Object> {
 	 */
 	private BigDecimal getValueInRange(BigDecimal min, BigDecimal max) {
 
-		BigDecimal scale = new BigDecimal(PodamUtils.getDoubleInRange(0.0, 1.0));
+		BigDecimal scale = new BigDecimal(RANDOM.nextDouble());
 		return min.add(max.subtract(min).multiply(scale));
 	}
 

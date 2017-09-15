@@ -1,16 +1,13 @@
 package uk.co.jemos.podam.typeManufacturers;
 
 
-import org.apache.commons.lang3.StringUtils;
-
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamConstants;
 import uk.co.jemos.podam.common.PodamDoubleValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default double type manufacturer.
@@ -19,80 +16,65 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class DoubleTypeManufacturerImpl extends AbstractTypeManufacturer<Double> {
+public class DoubleTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(DoubleTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Double getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Double getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Double retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamDoubleValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamDoubleValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
+        Double retValue = null;
 
-            String numValueStr = annotationStrategy.numValue();
-            if (StringUtils.isNotEmpty(numValueStr)) {
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
 
-                try {
-                    retValue = Double.valueOf(numValueStr);
-                } catch (NumberFormatException nfe) {
-                    throw new IllegalArgumentException(PodamConstants.THE_ANNOTATION_VALUE_STR
-                            + numValueStr
-                            + " could not be converted to a Double. An exception will be thrown.",
-                            nfe);
+            if (PodamDoubleValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamDoubleValue doubleStrategy = (PodamDoubleValue) annotation;
+
+                String numValueStr = doubleStrategy.numValue();
+                if (null != numValueStr && !"".equals(numValueStr)) {
+
+                    try {
+                        retValue = Double.valueOf(numValueStr);
+                    } catch (NumberFormatException nfe) {
+                        String errMsg = PodamConstants.THE_ANNOTATION_VALUE_STR
+                                + numValueStr
+                                + " could not be converted to a Double. An exception will be thrown.";
+                        LOG.error(errMsg);
+                        throw new IllegalArgumentException(errMsg, nfe);
+                    }
+
+                } else {
+
+                    double minValue = doubleStrategy.minValue();
+                    double maxValue = doubleStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getDoubleInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
                 }
-            } else {
 
-                double minValue = annotationStrategy.minValue();
-                double maxValue = annotationStrategy.maxValue();
+                break;
 
-                // Sanity check
-                if (minValue > maxValue) {
-                    maxValue = minValue;
-                }
-
-                retValue = getDoubleInRange(minValue, maxValue,
-                         attributeMetadata);
             }
-        } else {
-            retValue = getDouble(attributeMetadata);
+
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getDouble(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-    /** It returns a double/Double value
-	 *
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return a double/Double value
-	 */
-	public Double getDouble(AttributeMetadata attributeMetadata) {
-
-		return getDouble();
-	}
-
-	/**
-	 * It returns a double/Double value between min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A double/Double value between min and max value (included)
-	 */
-	public Double getDoubleInRange(double minValue, double maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return PodamUtils.getDoubleInRange(minValue, maxValue);
-	}
-
 }

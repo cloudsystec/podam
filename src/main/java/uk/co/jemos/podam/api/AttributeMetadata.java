@@ -38,9 +38,6 @@ public class AttributeMetadata implements Serializable {
 	/** The attribute type */
 	private final Class<?> attributeType;
 
-	/** The attribute generic type */
-	private final Type attributeGenericType;
-
 	/** The attribute type generic arguments */
 	private final Type[] attrGenericArgs;
 
@@ -49,9 +46,6 @@ public class AttributeMetadata implements Serializable {
 
 	/** Type of class that owns the attribute */
 	private final Class<?> pojoClass;
-
-	/** POJO that owns the attribute */
-	private final Object pojoInstance;
 
 	// ------------------->> Constructors
 
@@ -62,28 +56,21 @@ public class AttributeMetadata implements Serializable {
 	 *            The attribute name
 	 * @param attributeType
 	 *            The attribute type
-	 * @param attributeGenericType
-	 *            The attribute generic type
 	 * @param attrGenericArgs
 	 *            The attribute type generic arguments
 	 * @param attributeAnnotations
 	 *            The attribute annotations
 	 * @param declaringClass
 	 *            The type of class that owns the attribute
-	 * @param declaringInstance
-	 *            If available, instance of the declaring class or null otherwise
 	 */
 	public AttributeMetadata(String attributeName, Class<?> attributeType,
-			Type attributeGenericType, Type[] attrGenericArgs,
-			List<Annotation> attributeAnnotations, Class<?> declaringClass,
-			Object declaringInstance) {
+			Type[] attrGenericArgs, List<Annotation> attributeAnnotations,
+			Class<?> declaringClass) {
 		this.attributeName = attributeName;
 		this.attributeType = attributeType;
-		this.attributeGenericType = attributeGenericType;
 		this.attrGenericArgs = attrGenericArgs;
 		this.attributeAnnotations = attributeAnnotations;
 		this.pojoClass = declaringClass;
-		this.pojoInstance = declaringInstance;
 	}
 
 	/**
@@ -91,21 +78,15 @@ public class AttributeMetadata implements Serializable {
 	 * 
 	 * @param attributeType
 	 *            The attribute type
-	 * @param attributeGenericType
-	 *            The attribute generic type
 	 * @param attrGenericArgs
 	 *            The attribute type generic arguments
 	 * @param declaringClass
 	 *            The type of class that owns the attribute
-	 * @param declaringInstance
-	 *            If available, instance of the declaring class or null otherwise
 	 */
-	public AttributeMetadata(Class<?> attributeType, Type attributeGenericType,
-			Type[] attrGenericArgs, Class<?> declaringClass,
-			Object declaringInstance) {
-		this(null, attributeType, attributeGenericType, attrGenericArgs,
-				Collections.<Annotation>emptyList(), declaringClass,
-				declaringInstance);
+	public AttributeMetadata(Class<?> attributeType, Type[] attrGenericArgs,
+			Class<?> declaringClass) {
+		this(null, attributeType, attrGenericArgs,
+				Collections.<Annotation>emptyList(), declaringClass);
 	}
 
 	// ------------------->> Public methods
@@ -120,10 +101,6 @@ public class AttributeMetadata implements Serializable {
 		return attributeType;
 	}
 
-	public Type getAttributeGenericType() {
-		return attributeGenericType;
-	}
-
 	public Type[] getAttrGenericArgs() {
 		return attrGenericArgs;
 	}
@@ -136,10 +113,6 @@ public class AttributeMetadata implements Serializable {
 		return pojoClass;
 	}
 
-	public Object getPojoInstance() {
-		return pojoInstance;
-	}
-
 	// ------------------->> Private methods
 
 	// ------------------->> equals() / hashcode() / toString()
@@ -150,13 +123,14 @@ public class AttributeMetadata implements Serializable {
 	@Override
 	public String toString() {
 		StringBuilder builder = new StringBuilder();
-		builder.append("AttributeMetadata [");
-		builder.append("attributeName=").append(attributeName);
-		builder.append(", attributeType=").append(attributeType);
-		builder.append(", attributeGenericType=").append(attributeGenericType);
-		builder.append(", pojoClass=").append(pojoClass);
-		builder.append(", pojoInstance=").append(pojoInstance.hashCode());
-		builder.append(", attributeAnnotations=").append(attributeAnnotations);
+		builder.append("AttributeMetadata [attributeName=");
+		builder.append(attributeName);
+		builder.append(", attributeType=");
+		builder.append(attributeType);
+		builder.append(", pojoClass=");
+		builder.append(pojoClass);
+		builder.append(", attributeAnnotations=");
+		builder.append(attributeAnnotations);
 		builder.append("]");
 		return builder.toString();
 	}

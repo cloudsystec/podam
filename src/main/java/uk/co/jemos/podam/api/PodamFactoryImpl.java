@@ -5,11 +5,12 @@ package uk.co.jemos.podam.api;
 
 import net.jcip.annotations.Immutable;
 import net.jcip.annotations.NotThreadSafe;
-
-import org.apache.commons.lang3.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHandlingException;
 import uk.co.jemos.podam.api.DataProviderStrategy.Order;
 import uk.co.jemos.podam.common.AttributeStrategy;
 import uk.co.jemos.podam.common.ManufacturingContext;
@@ -19,7 +20,6 @@ import uk.co.jemos.podam.exceptions.PodamMockeryException;
 import uk.co.jemos.podam.typeManufacturers.TypeManufacturerUtil;
 
 import javax.xml.ws.Holder;
-
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -45,12 +45,17 @@ public class PodamFactoryImpl implements PodamFactory {
 
 	private static final String MAP_CREATION_EXCEPTION_STR = "An exception occurred while creating a Map object";
 
+	private static final String UNCHECKED_STR = "unchecked";
+
+    /** The message channel where to send/receive the type request */
+    private static MessageChannel messageChannel;
+
+
     /** Application logger */
 	private static final Logger LOG = LoggerFactory.getLogger(PodamFactoryImpl.class);
 
-	/** Empty type map */
-	private static final Map<String, Type> NULL_TYPE_ARGS_MAP = new HashMap<String, Type>();
 
+	private AbstractApplicationContext applicationContext;
 
 	// ------------------->> Instance / variables
 
@@ -126,6 +131,8 @@ public class PodamFactoryImpl implements PodamFactory {
 			DataProviderStrategy strategy) {
 		this.externalFactory = externalFactory;
 		this.strategy = strategy;
+		this.applicationContext = new ClassPathXmlApplicationContext(PodamConstants.SPRING_ROOT_CONFIG_LOCATION);
+        this.messageChannel = applicationContext.getBean("podamInputChannel", MessageChannel.class);
 	}
 
 	// ------------------->> Public methods
@@ -136,9 +143,23 @@ public class PodamFactoryImpl implements PodamFactory {
 	@Override
 	public <T> T manufacturePojoWithFullData(Class<T> pojoClass, Type... genericTypeArgs) {
 		ManufacturingContext manufacturingCtx = new ManufacturingContext();
-		manufacturingCtx.getPojos().put(pojoClass, 1);
+		manufacturingCtx.getPojos().put(pojoClass, 0);
 		manufacturingCtx.setConstructorOrdering(Order.HEAVY_FIRST);
-		return doManufacturePojo(pojoClass, manufacturingCtx, genericTypeArgs);
+		try {
+			Class<?> declaringClass = null;
+			AttributeMetadata pojoMetadata = new AttributeMetadata(pojoClass,
+					genericTypeArgs, declaringClass);
+			return this.manufacturePojoInternal(pojoClass, pojoMetadata,
+                    manufacturingCtx, genericTypeArgs);
+		} catch (InstantiationException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (IllegalAccessException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (InvocationTargetException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (ClassNotFoundException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		}
     }
 
 	/**
@@ -147,8 +168,22 @@ public class PodamFactoryImpl implements PodamFactory {
 	@Override
 	public <T> T manufacturePojo(Class<T> pojoClass, Type... genericTypeArgs) {
 		ManufacturingContext manufacturingCtx = new ManufacturingContext();
-		manufacturingCtx.getPojos().put(pojoClass, 1);
-		return doManufacturePojo(pojoClass, manufacturingCtx, genericTypeArgs);
+		manufacturingCtx.getPojos().put(pojoClass, 0);
+		try {
+			Class<?> declaringClass = null;
+			AttributeMetadata pojoMetadata = new AttributeMetadata(pojoClass,
+					genericTypeArgs, declaringClass);
+			return this.manufacturePojoInternal(pojoClass, pojoMetadata,
+                    manufacturingCtx, genericTypeArgs);
+		} catch (InstantiationException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (IllegalAccessException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (InvocationTargetException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		} catch (ClassNotFoundException e) {
+			throw new PodamMockeryException(e.getMessage(), e);
+		}
 	}
 
 	/**
@@ -157,14 +192,13 @@ public class PodamFactoryImpl implements PodamFactory {
 	@Override
 	public <T> T populatePojo(T pojo, Type... genericTypeArgs) {
 		ManufacturingContext manufacturingCtx = new ManufacturingContext();
-		manufacturingCtx.getPojos().put(pojo.getClass(), 1);
+		manufacturingCtx.getPojos().put(pojo.getClass(), 0);
 		final Map<String, Type> typeArgsMap = new HashMap<String, Type>();
 		Type[] genericTypeArgsExtra = TypeManufacturerUtil.fillTypeArgMap(typeArgsMap,
                 pojo.getClass(), genericTypeArgs);
 		try {
-			List<Annotation> annotations = null;
-			return this.populatePojoInternal(pojo, annotations,
-					manufacturingCtx, typeArgsMap, genericTypeArgsExtra);
+			return this.populatePojoInternal(pojo, manufacturingCtx, typeArgsMap,
+					genericTypeArgsExtra);
 		} catch (InstantiationException e) {
 			throw new PodamMockeryException(e.getMessage(), e);
 		} catch (IllegalAccessException e) {
@@ -232,19 +266,19 @@ public class PodamFactoryImpl implements PodamFactory {
 	// ------------------->> Private methods
 
 	/**
-	 * It attempts to create an instance of the given class with a static method
-	 * of the factory
+	 * It attempts to create an instance of the given class
 	 * <p>
-	 * This method attempts to instantiate POJO with a static method of provided
-	 * factory, for example, getInstance().
+	 * This method attempts to create an instance of the given argument for
+	 * classes without setters. These may be either immutable classes (e.g. with
+	 * final attributes and no setters) or Java classes (e.g. belonging to the
+	 * java / javax namespace). In case the class does not provide a public,
+	 * no-arg constructor (e.g. Calendar), this method attempts to find a ,
+	 * no-args, factory method (e.g. getInstance()) and it invokes it
 	 * </p>
 	 *
-	 * @param <T>
-	 *            The type of Pojo class
-	 * @param factoryClass
-	 *            The factory class, which will be used for POJO instantiation
 	 * @param pojoClass
 	 *            The name of the class for which an instance filled with values
+	 *            is required
 	 * @param manufacturingCtx
 	 *            the manufacturing context
 	 * @param typeArgsMap
@@ -268,19 +302,19 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws ClassNotFoundException
 	 *             If it was not possible to create a class from a string
 	 */
-	private <T> T instantiatePojoWithFactory(
-			Class<?> factoryClass, Class<T> pojoClass,
-			ManufacturingContext manufacturingCtx,
+	private Object instantiatePojoWithoutConstructors(
+			Class<?> pojoClass, ManufacturingContext manufacturingCtx,
 			Map<String, Type> typeArgsMap, Type... genericTypeArgs)
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
+
+		Object retValue = null;
 
 		// If no publicly accessible constructors are available,
 		// the best we can do is to find a constructor (e.g.
 		// getInstance())
 
-		Method[] declaredMethods = TypeManufacturerUtil.findSuitableConstructors(
-				factoryClass, pojoClass);
+		Method[] declaredMethods = pojoClass.getDeclaredMethods();
 		strategy.sort(declaredMethods, manufacturingCtx.getConstructorOrdering());
 
 		// A candidate factory method is a method which returns the
@@ -291,9 +325,10 @@ public class PodamFactoryImpl implements PodamFactory {
 
 		for (Method candidateConstructor : declaredMethods) {
 
-			Object factoryInstance = null;
-			if (!Modifier.isStatic(candidateConstructor.getModifiers())) {
-				factoryInstance = manufacturePojo(factoryClass);
+			if (!Modifier.isStatic(candidateConstructor.getModifiers())
+					|| !candidateConstructor.getReturnType().equals(pojoClass)
+					|| retValue != null) {
+				continue;
 			}
 
 			parameterValues = getParameterValuesForMethod(candidateConstructor,
@@ -301,12 +336,15 @@ public class PodamFactoryImpl implements PodamFactory {
 
 			try {
 
-				@SuppressWarnings("unchecked")
-				T retValue = (T) candidateConstructor.invoke(factoryInstance,
+				retValue = candidateConstructor.invoke(pojoClass,
 						parameterValues);
 				LOG.debug("Could create an instance using "
 						+ candidateConstructor);
-				return retValue;
+
+				//If Podam has created the POJO, we're done
+				if (retValue != null) {
+					break;
+				}
 
 			} catch (Exception t) {
 
@@ -319,10 +357,13 @@ public class PodamFactoryImpl implements PodamFactory {
 
 		}
 
-		LOG.debug("For class {} PODAM could not possibly create"
-				+ " a value statically. Will try other means.",
-				pojoClass);
-		return null;
+		if (retValue == null) {
+			LOG.debug("For class {} PODAM could not possibly create"
+					+ " a value statically. Will try other means.",
+					pojoClass);
+		}
+
+		return retValue;
 
 	}
 
@@ -348,6 +389,7 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws SecurityException
 	 *             If an security was violated
 	 */
+	@SuppressWarnings({ UNCHECKED_STR })
 	private <T> T instantiatePojo(Class<T> pojoClass,
 			ManufacturingContext manufacturingCtx, Map<String, Type> typeArgsMap,
 			Type... genericTypeArgs)
@@ -359,8 +401,8 @@ public class PodamFactoryImpl implements PodamFactory {
 		if (constructors.length == 0 || Modifier.isAbstract(pojoClass.getModifiers())) {
 			/* No public constructors, we will try static factory methods */
 			try {
-				retValue = instantiatePojoWithFactory(
-						pojoClass, pojoClass, manufacturingCtx, typeArgsMap, genericTypeArgs);
+				retValue = (T) instantiatePojoWithoutConstructors(
+						pojoClass, manufacturingCtx, typeArgsMap, genericTypeArgs);
 			} catch (Exception e) {
 				LOG.debug("We couldn't create an instance for pojo: "
 						+ pojoClass + " with factory methods, will "
@@ -373,7 +415,7 @@ public class PodamFactoryImpl implements PodamFactory {
 			}
 		}
 
-		if (retValue == null) {
+		if (retValue == null && constructors.length > 0) {
 
 			strategy.sort(constructors, manufacturingCtx.getConstructorOrdering());
 
@@ -389,12 +431,12 @@ public class PodamFactoryImpl implements PodamFactory {
 						constructor.setAccessible(true);
 					}
 
-					@SuppressWarnings("unchecked")
-					T tmp = (T) constructor.newInstance(parameterValues);
-					retValue = tmp;
-					LOG.debug("We could create an instance with constructor: "
-							+ constructor);
-					break;
+					retValue = (T) constructor.newInstance(parameterValues);
+					if (retValue != null) {
+						LOG.debug("We could create an instance with constructor: "
+								+ constructor);
+						break;
+					}
 				} catch (Exception e) {
 					LOG.debug("We couldn't create an instance for pojo: {} with"
 							+ " constructor: {}. Will try with another one.",
@@ -408,35 +450,6 @@ public class PodamFactoryImpl implements PodamFactory {
 					+ " a value. Will try other means.", pojoClass);
 		}
 		return retValue;
-	}
-
-	/**
-	 * Manufactures and populates the pojo class
-	 *
-	 * @param <T> The type of the instance to return
-	 * @param pojoClass the class to instantiate
-	 * @param manufacturingCtx the initialized manufacturing context
-	 * @param genericTypeArgs generic arguments for the pojo class
-	 * @return instance of @pojoClass or null in case it cannot be instantiated
-	 */
-	private <T> T doManufacturePojo(Class<T> pojoClass,
-			ManufacturingContext manufacturingCtx, Type... genericTypeArgs) {
-		try {
-			Class<?> declaringClass = null;
-			Object declaringInstance = null;
-			AttributeMetadata pojoMetadata = new AttributeMetadata(pojoClass,
-					pojoClass, genericTypeArgs, declaringClass, declaringInstance);
-			return this.manufacturePojoInternal(pojoClass, pojoMetadata,
-                    manufacturingCtx, genericTypeArgs);
-		} catch (InstantiationException e) {
-			throw new PodamMockeryException(e.getMessage(), e);
-		} catch (IllegalAccessException e) {
-			throw new PodamMockeryException(e.getMessage(), e);
-		} catch (InvocationTargetException e) {
-			throw new PodamMockeryException(e.getMessage(), e);
-		} catch (ClassNotFoundException e) {
-			throw new PodamMockeryException(e.getMessage(), e);
-		}
 	}
 
 	/**
@@ -470,61 +483,68 @@ public class PodamFactoryImpl implements PodamFactory {
 	 *             if a problem occurred while creating a POJO instance or while
 	 *             setting its state
 	 */
+	@SuppressWarnings(UNCHECKED_STR)
 	private <T> T manufacturePojoInternal(Class<T> pojoClass,
 			AttributeMetadata pojoMetadata, ManufacturingContext manufacturingCtx,
 			Type... genericTypeArgs)
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
 
+		LOG.debug("Manufacturing {} with parameters {}",
+				pojoClass, Arrays.toString(genericTypeArgs));
+
+		T retValue = null;
+
 		// reuse object from memoization table
-		@SuppressWarnings("unchecked")
 		T objectToReuse = (T) strategy.getMemoizedObject(pojoMetadata);
 		if (objectToReuse != null) {
-			LOG.debug("Fetched memoized object for {} with parameters {}",
-					pojoClass, Arrays.toString(genericTypeArgs));
+			LOG.debug("Fetched memoized object for {}", pojoClass);
 			return objectToReuse;
-		} else {
-			LOG.debug("Manufacturing {} with parameters {}",
-					pojoClass, Arrays.toString(genericTypeArgs));
+		}
+
+		if (pojoClass.isEnum()) {
+
+			return (T) TypeManufacturerUtil.getTypeValue(strategy, messageChannel, pojoMetadata, PodamConstants
+                    .ENUMERATION_QUALIFIER);
+		}
+
+		if (pojoClass.isPrimitive()) {
+
+            return (T) TypeManufacturerUtil.getTypeValue(strategy, messageChannel, pojoMetadata, pojoClass.getName());
+		}
+
+		if (pojoClass.isInterface()) {
+
+            return getValueForAbstractType(pojoClass, pojoMetadata, manufacturingCtx, genericTypeArgs);
+
 		}
 
 		final Map<String, Type> typeArgsMap = new HashMap<String, Type>();
+
 		Type[] genericTypeArgsExtra = TypeManufacturerUtil.fillTypeArgMap(typeArgsMap,
-				pojoClass, genericTypeArgs);
+                pojoClass, genericTypeArgs);
 
-		T retValue = (T) strategy.getTypeValue(pojoMetadata, typeArgsMap, pojoClass);
-		if (null == retValue) {
+		try {
 
-			if (pojoClass.isInterface()) {
+			retValue = instantiatePojo(pojoClass, manufacturingCtx, typeArgsMap,
+					genericTypeArgsExtra);
 
-				return getValueForAbstractType(pojoClass, pojoMetadata,
-						manufacturingCtx, typeArgsMap, genericTypeArgs);
-			}
-
-			try {
-
-				retValue = instantiatePojo(pojoClass, manufacturingCtx, typeArgsMap,
-						genericTypeArgsExtra);
-			} catch (SecurityException e) {
-
-				throw new PodamMockeryException(
-						"Security exception while applying introspection.", e);
-			}
+		} catch (SecurityException e) {
+			throw new PodamMockeryException(
+					"Security exception while applying introspection.", e);
 		}
 
 		if (retValue == null) {
-			return getValueForAbstractType(pojoClass, pojoMetadata,
-					manufacturingCtx, typeArgsMap, genericTypeArgs);
-		} else {
+            return getValueForAbstractType(pojoClass, pojoMetadata, manufacturingCtx, genericTypeArgs);
+		}
 
-			// update memoization cache with new object
-			// the reference is stored before properties are set so that recursive
-			// properties can use it
-			strategy.cacheMemoizedObject(pojoMetadata, retValue);
+		// update memoization cache with new object
+		// the reference is stored before properties are set so that recursive
+		// properties can use it
+		strategy.cacheMemoizedObject(pojoMetadata, retValue);
 
-			List<Annotation> annotations = null;
-			populatePojoInternal(retValue, annotations, manufacturingCtx,
-					typeArgsMap, genericTypeArgsExtra);
+		if (retValue != null) {
+			populatePojoInternal(retValue, manufacturingCtx, typeArgsMap, genericTypeArgsExtra);
 		}
 
 		return retValue;
@@ -539,8 +559,6 @@ public class PodamFactoryImpl implements PodamFactory {
 	 *            The type for which should be populated
 	 * @param pojo
 	 *            An instance to be filled with dummy values
-	 * @param annotations
-	 *            a list of annotations attached to this POJO defined elsewhere 
 	 * @param manufacturingCtx
 	 *            the manufacturing context
 	 * @param typeArgsMap
@@ -560,61 +578,206 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws ClassNotFoundException
 	 *             If manufactured class cannot be loaded
 	 */
-	private <T> T populatePojoInternal(T pojo, List<Annotation> annotations,
-			ManufacturingContext manufacturingCtx,
+	@SuppressWarnings(UNCHECKED_STR)
+	private <T> T populatePojoInternal(T pojo, ManufacturingContext manufacturingCtx,
 			Map<String, Type> typeArgsMap,
 			Type... genericTypeArgs)
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
 
-		LOG.debug("Populating pojo {}", pojo.getClass());
-
 		Class<?> pojoClass = pojo.getClass();
-		if (pojoClass.isArray()) {
-			if (null == annotations) {
-				annotations = new ArrayList<Annotation>();
-			}
-			String attributeName = null;
-			fillArray(pojo, attributeName,
-					pojoClass.getClass().getComponentType(),
-					pojoClass.getClass().getComponentType(),
-					annotations,
-					manufacturingCtx, typeArgsMap);
-		} else if (pojo instanceof Collection) {
-			@SuppressWarnings("unchecked")
-			Collection<Object> collection = (Collection<Object>) pojo;
-			AtomicReference<Type[]> elementGenericTypeArgs = new AtomicReference<Type[]>(
-					PodamConstants.NO_TYPES);
-			Class<?> elementTypeClass = findInheretedCollectionElementType(collection,
-					manufacturingCtx, elementGenericTypeArgs, typeArgsMap, genericTypeArgs);
-			if (null == annotations) {
-				annotations = new ArrayList<Annotation>();
-			}
-			for (Annotation annotation : collection.getClass().getAnnotations()) {
-				annotations.add(annotation);
-			}
-			String attributeName = null;
-			fillCollection(manufacturingCtx, annotations, attributeName,
-					collection, elementTypeClass, elementGenericTypeArgs.get());
-		} else if (pojo instanceof Map) {
-			@SuppressWarnings("unchecked")
-			Map<Object,Object> map = (Map<Object,Object>)pojo;
-			MapArguments mapArguments = findInheretedMapElementType(
-					map, manufacturingCtx, typeArgsMap, genericTypeArgs);
-			if (null != annotations) {
-				mapArguments.getAnnotations().addAll(annotations);
-			}
-			fillMap(mapArguments, manufacturingCtx);
+		if (pojo instanceof Collection && ((Collection<?>)pojo).size() == 0) {
+			fillCollection((Collection<? super Object>)pojo, manufacturingCtx, typeArgsMap, genericTypeArgs);
+		} else if (pojo instanceof Map && ((Map<?,?>)pojo).size() == 0) {
+			fillMap((Map<? super Object,? super Object>)pojo, manufacturingCtx, typeArgsMap, genericTypeArgs);
 		}
+
+		Class<?>[] parameterTypes = null;
+		Class<?> attributeType = null;
 
 		ClassInfo classInfo = classInfoStrategy.getClassInfo(pojo.getClass());
 
 		Set<ClassAttribute> classAttributes = classInfo.getClassAttributes();
 
-		for (ClassAttribute attribute : classAttributes) {
+		// According to JavaBeans standards, setters should have only
+		// one argument
+		Object setterArg = null;
+		Iterator<ClassAttribute> iter = classAttributes.iterator();
+		while (iter.hasNext()) {
 
-			if (!populateReadWriteField(pojo, attribute, typeArgsMap, manufacturingCtx)) {
-				populateReadOnlyField(pojo, attribute, typeArgsMap, manufacturingCtx, genericTypeArgs);
+			ClassAttribute attribute = iter.next();
+			Set<Method> setters = attribute.getSetters();
+			if (setters.isEmpty()) {
+				if (attribute.getGetters().isEmpty()) {
+					iter.remove();
+				}
+				continue;
+			} else {
+				iter.remove();
+			}
+
+			/* We want to find setter defined the latest */
+			Method setter = null;
+			for (Method current : setters) {
+				if (setter == null || setter.getDeclaringClass().isAssignableFrom(current.getDeclaringClass())) {
+					setter = current;
+				}
+			}
+
+			parameterTypes = setter.getParameterTypes();
+			if (parameterTypes.length != 1) {
+				LOG.warn("Skipping setter with non-single arguments {}",
+						setter);
+				continue;
+			}
+
+			// A class which has got an attribute to itself (e.g.
+			// recursive hierarchies)
+			attributeType = parameterTypes[0];
+
+			// If an attribute has been annotated with
+			// PodamAttributeStrategy, it takes the precedence over any
+			// other strategy. Additionally we don't pass the attribute
+			// metadata for value customisation; if user went to the extent
+			// of specifying a PodamAttributeStrategy annotation for an
+			// attribute they are already customising the value assigned to
+			// that attribute.
+
+			String attributeName = PodamUtils
+					.extractFieldNameFromSetterMethod(setter);
+			List<Annotation> pojoAttributeAnnotations
+					= PodamUtils.getAttributeAnnotations(
+							attribute.getAttribute(), setter);
+
+			AttributeStrategy<?> attributeStrategy
+					= TypeManufacturerUtil.findAttributeStrategy(strategy, pojoAttributeAnnotations, attributeType);
+			if (null != attributeStrategy) {
+
+				LOG.debug("The attribute: " + attributeName
+						+ " will be filled using the following strategy: "
+						+ attributeStrategy);
+
+				setterArg = TypeManufacturerUtil.returnAttributeDataStrategyValue(attributeType,
+                        attributeStrategy);
+
+			} else {
+
+				Type[] typeArguments = PodamConstants.NO_TYPES;
+				// If the parameter is a generic parameterized type resolve
+				// the actual type arguments
+				Type genericType = setter.getGenericParameterTypes()[0];
+				if (genericType instanceof ParameterizedType) {
+					final ParameterizedType attributeParameterizedType
+							= (ParameterizedType) genericType;
+					typeArguments = attributeParameterizedType
+							.getActualTypeArguments();
+
+				} else if (genericType instanceof TypeVariable) {
+
+					final TypeVariable<?> typeVariable = (TypeVariable<?>) genericType;
+					Type type = typeArgsMap.get(typeVariable.getName());
+
+					if (type instanceof ParameterizedType) {
+
+						final ParameterizedType attributeParameterizedType = (ParameterizedType) type;
+
+						typeArguments = attributeParameterizedType
+								.getActualTypeArguments();
+						attributeType = (Class<?>) attributeParameterizedType
+								.getRawType();
+					} else {
+						attributeType = (Class<?>) type;
+					}
+
+				}
+				AtomicReference<Type[]> typeGenericTypeArgs
+						= new AtomicReference<Type[]>(PodamConstants.NO_TYPES);
+
+				for (int i = 0; i < typeArguments.length; i++) {
+					if (typeArguments[i] instanceof TypeVariable) {
+						Class<?> resolvedType = TypeManufacturerUtil.resolveGenericParameter(typeArguments[i],
+                                typeArgsMap, typeGenericTypeArgs);
+						if (!Collection.class.isAssignableFrom(resolvedType) && !Map.class.isAssignableFrom(resolvedType)) {
+							typeArguments[i] = resolvedType;
+						}
+					}
+				}
+
+				setterArg = manufactureAttributeValue(pojo, manufacturingCtx,
+						attributeType, genericType,
+						pojoAttributeAnnotations, attributeName,
+						typeArgsMap, typeArguments);
+			}
+
+			try {
+				setter.invoke(pojo, setterArg);
+			} catch(IllegalAccessException e) {
+				LOG.warn("{} is not accessible. Setting it to accessible."
+						+ " However this is a security hack and your code"
+						+ " should really adhere to JavaBeans standards.",
+						setter.toString());
+				setter.setAccessible(true);
+				setter.invoke(pojo, setterArg);
+			}
+		}
+
+		for (ClassAttribute readOnlyAttribute : classAttributes) {
+
+			Method getter = readOnlyAttribute.getGetters().iterator().next();
+			if (getter != null && !getter.getReturnType().isPrimitive()) {
+
+				if (getter.getGenericParameterTypes().length == 0) {
+
+					Object fieldValue = null;
+					try {
+						fieldValue = getter.invoke(pojo, PodamConstants.NO_ARGS);
+					} catch(Exception e) {
+						LOG.debug("Cannot access {}, skipping", getter);
+					}
+					if (fieldValue != null) {
+
+						LOG.debug("Populating read-only field {}", getter);
+						Type[] genericTypeArgsAll;
+						Map<String, Type> paramTypeArgsMap;
+						if (getter.getGenericReturnType() instanceof ParameterizedType) {
+
+							paramTypeArgsMap = new HashMap<String, Type>(typeArgsMap);
+
+							ParameterizedType paramType
+									= (ParameterizedType) getter.getGenericReturnType();
+							Type[] actualTypes = paramType.getActualTypeArguments();
+							TypeManufacturerUtil.fillTypeArgMap(paramTypeArgsMap,
+									getter.getReturnType(), actualTypes);
+							genericTypeArgsAll = TypeManufacturerUtil.fillTypeArgMap(paramTypeArgsMap,
+                                    getter.getReturnType(), genericTypeArgs);
+
+						} else {
+
+							paramTypeArgsMap = typeArgsMap;
+							genericTypeArgsAll = genericTypeArgs;
+						}
+
+						Class<?> fieldClass = fieldValue.getClass();
+						Integer depth = manufacturingCtx.getPojos().get(fieldClass);
+						if (depth == null) {
+							depth = -1;
+						}
+						if (depth <= strategy.getMaxDepth(fieldClass)) {
+
+							manufacturingCtx.getPojos().put(fieldClass, depth + 1);
+							populatePojoInternal(fieldValue, manufacturingCtx, paramTypeArgsMap, genericTypeArgsAll);
+							manufacturingCtx.getPojos().put(fieldClass, depth);
+
+						} else {
+
+							LOG.warn("Loop in filling read-only field {} detected.",
+									getter);
+						}
+					}
+				} else {
+
+					LOG.warn("Skipping invalid getter {}", getter);
+				}
 			}
 		}
 
@@ -630,230 +793,6 @@ public class PodamFactoryImpl implements PodamFactory {
 		}
 
 		return pojo;
-	}
-
-	/**
-	 * Fills a field with a getter
-	 *
-	 * @param <T>
-	 *            The type for which should be populated
-	 * @param pojo
-	 *            The POJO being filled with values
-	 * @param attribute
-	 *            a attribute we are filling
-	 * @param typeArgsMap
-	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
-	 *            example) with their actual types
-	 * @param manufacturingCtx
-	 *            the manufacturing context
-	 * @param genericTypeArgs
-	 *            The generic type arguments for the current generic class
-	 *            instance
-	 * @return true, if attribute was found and populated
-	 * @throws ClassNotFoundException 
-	 *              If class being manufactured cannot be loaded
-	 * @throws InstantiationException
-	 *             If an exception occurred during instantiation
-	 * @throws IllegalAccessException
-	 *             If security was violated while creating the object
-	 * @throws InvocationTargetException
-	 *             If an exception occurred while invoking the constructor or
-	 *             factory method
-	 */
-	private <T> boolean populateReadOnlyField(T pojo, ClassAttribute attribute,
-			Map<String, Type> typeArgsMap, ManufacturingContext manufacturingCtx,
-			Type... genericTypeArgs)
-			throws InstantiationException, IllegalAccessException,
-					InvocationTargetException, ClassNotFoundException {
-
-		Method getter = PodamUtils.selectLatestMethod(attribute.getGetters());
-		if (getter == null) {
-			return false;
-		}
-
-		if (getter.getGenericParameterTypes().length > 0) {
-			LOG.warn("Skipping invalid getter {}", getter);
-			return false;
-		}
-
-		Class<?> pojoType = getter.getReturnType();
-		if (pojoType.isPrimitive()) {
-			/* TODO: non-zero values should be fine */
-			return false;
-		}
-
-		Object fieldValue = null;
-		try {
-			fieldValue = getter.invoke(pojo, PodamConstants.NO_ARGS);
-		} catch(Exception e) {
-			LOG.debug("Cannot access {}, skipping", getter);
-		}
-
-		if (fieldValue != null) {
-
-			LOG.debug("Populating read-only field {}", getter);
-
-			Type[] genericTypeArgsAll;
-			Map<String, Type> paramTypeArgsMap;
-			Type genericPojoType = getter.getGenericReturnType();
-			if (genericPojoType instanceof ParameterizedType) {
-
-				paramTypeArgsMap = new HashMap<String, Type>(typeArgsMap);
-
-				ParameterizedType paramType = (ParameterizedType) genericPojoType;
-				Type[] actualTypes = paramType.getActualTypeArguments();
-				TypeManufacturerUtil.fillTypeArgMap(paramTypeArgsMap,
-						pojoType, actualTypes);
-				genericTypeArgsAll = TypeManufacturerUtil.fillTypeArgMap(paramTypeArgsMap,
-						pojoType, genericTypeArgs);
-
-			} else {
-
-				paramTypeArgsMap = typeArgsMap;
-				genericTypeArgsAll = genericTypeArgs;
-			}
-
-			List<Annotation> pojoAttributeAnnotations =
-					PodamUtils.getAttributeAnnotations(
-							attribute.getAttribute(), getter);
-
-			Class<?> fieldClass = fieldValue.getClass();
-			Integer depth = manufacturingCtx.getPojos().get(fieldClass);
-			if (depth == null) {
-				depth = 0;
-			}
-			if (depth < strategy.getMaxDepth(fieldClass)) {
-
-				manufacturingCtx.getPojos().put(fieldClass, depth + 1);
-				populatePojoInternal(fieldValue, pojoAttributeAnnotations,
-						manufacturingCtx, paramTypeArgsMap, genericTypeArgsAll);
-				manufacturingCtx.getPojos().put(fieldClass, depth);
-			} else {
-
-				LOG.warn("Loop of depth " + depth + " in filling read-only field {} detected.",
-						getter);
-			}
-			return true;
-		} else {
-
-			return false;
-		}
-	}
-
-	/**
-	 * Fills a field with a setter
-	 *
-	 * @param <T>
-	 *            The type for which should be populated
-	 * @param pojo
-	 *            The POJO being filled with values
-	 * @param attribute
-	 *            a attribute we are filling
-	 * @param typeArgsMap
-	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
-	 *            example) with their actual types
-	 * @param manufacturingCtx
-	 *            the manufacturing context
-	 * @return true, if attribute was found and populated
-	 * @throws ClassNotFoundException 
-	 *              If class being manufactured cannot be loaded
-	 * @throws InstantiationException
-	 *             If an exception occurred during instantiation
-	 * @throws IllegalAccessException
-	 *             If security was violated while creating the object
-	 * @throws InvocationTargetException
-	 *             If an exception occurred while invoking the constructor or
-	 *             factory method
-	 */
-	private <T> boolean populateReadWriteField(T pojo, ClassAttribute attribute,
-			Map<String, Type> typeArgsMap, ManufacturingContext manufacturingCtx)
-			throws InstantiationException, IllegalAccessException,
-					InvocationTargetException, ClassNotFoundException {
-
-		Method setter = PodamUtils.selectLatestMethod(attribute.getSetters());
-		if (setter == null) {
-			return false;
-		}
-
-		Class<?>[] parameterTypes = setter.getParameterTypes();
-		if (parameterTypes.length != 1) {
-			// According to JavaBeans standards, setters should have only
-			// one argument
-			LOG.warn("Skipping setter with non-single arguments {}",
-					setter);
-			return false;
-		}
-
-		LOG.debug("Populating read-write field {}", setter);
-
-		// A class which has got an attribute to itself (e.g.
-		// recursive hierarchies)
-		Class<?> attributeType = parameterTypes[0];
-
-		// If an attribute has been annotated with
-		// PodamAttributeStrategy, it takes the precedence over any
-		// other strategy. Additionally we don't pass the attribute
-		// metadata for value customisation; if user went to the extent
-		// of specifying a PodamAttributeStrategy annotation for an
-		// attribute they are already customising the value assigned to
-		// that attribute.
-
-		List<Annotation> pojoAttributeAnnotations
-				= PodamUtils.getAttributeAnnotations(
-						attribute.getAttribute(), setter);
-
-		AttributeStrategy<?> attributeStrategy
-				= TypeManufacturerUtil.findAttributeStrategy(strategy, pojoAttributeAnnotations, attributeType);
-		Object setterArg = null;
-		if (null != attributeStrategy) {
-
-			setterArg = TypeManufacturerUtil.returnAttributeDataStrategyValue(
-					attributeType, pojoAttributeAnnotations, attributeStrategy);
-
-		} else {
-
-			AtomicReference<Type[]> typeGenericTypeArgs
-					= new AtomicReference<Type[]>(PodamConstants.NO_TYPES);
-			// If the parameter is a generic parameterized type resolve
-			// the actual type arguments
-			Type genericType = setter.getGenericParameterTypes()[0];
-
-			final Type[] typeArguments;
-			if (!(genericType instanceof GenericArrayType)) {
-				attributeType = TypeManufacturerUtil.resolveGenericParameter(genericType,
-						typeArgsMap, typeGenericTypeArgs);
-				typeArguments = typeGenericTypeArgs.get();
-			} else {
-				typeArguments = PodamConstants.NO_TYPES;
-			}
-
-			for (int i = 0; i < typeArguments.length; i++) {
-				if (typeArguments[i] instanceof TypeVariable) {
-					Class<?> resolvedType = TypeManufacturerUtil.resolveGenericParameter(typeArguments[i],
-                            typeArgsMap, typeGenericTypeArgs);
-					if (!Collection.class.isAssignableFrom(resolvedType) && !Map.class.isAssignableFrom(resolvedType)) {
-						typeArguments[i] = resolvedType;
-					}
-				}
-			}
-
-			setterArg = manufactureAttributeValue(pojo, manufacturingCtx,
-					attributeType, genericType,
-					pojoAttributeAnnotations, attribute.getName(),
-					typeArgsMap, typeArguments);
-		}
-
-		try {
-			setter.invoke(pojo, setterArg);
-		} catch(IllegalAccessException e) {
-			LOG.warn("{} is not accessible. Setting it to accessible."
-					+ " However this is a security hack and your code"
-					+ " should really adhere to JavaBeans standards.",
-					setter.toString());
-			setter.setAccessible(true);
-			setter.invoke(pojo, setterArg);
-		}
-		return true;
 	}
 
 	/**
@@ -889,6 +828,8 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws InvocationTargetException
 	 *             If an exception occurred while invoking the constructor or
 	 *             factory method
+	 * @throws ClassNotFoundException
+	 *             If it was not possible to create a class from a string
 	 * @throws IllegalArgumentException
 	 *             <ul>
 	 *             <li>If an illegal argument was passed</li>
@@ -896,8 +837,7 @@ public class PodamFactoryImpl implements PodamFactory {
 	 *             annotation and such value could not be converted to the
 	 *             desired type</li>
 	 *             </ul>
-	 * @throws ClassNotFoundException
-	 *              If class being manufactured cannot be loaded
+     * @throws MessageHandlingException If there was a problem handling the message
 	 *
 	 */
 	private Object manufactureAttributeValue(Object pojo,
@@ -906,15 +846,13 @@ public class PodamFactoryImpl implements PodamFactory {
 			String attributeName, Map<String, Type> typeArgsMap,
 			Type... genericTypeArgs)
 			throws InstantiationException, IllegalAccessException,
-			InvocationTargetException, ClassNotFoundException {
+			InvocationTargetException, ClassNotFoundException, MessageHandlingException {
 
 		Object attributeValue = null;
 
 		Class<?> pojoClass = (pojo instanceof Class ? (Class<?>) pojo : pojo.getClass());
 		Class<?> realAttributeType;
-		if (attributeType != genericAttributeType
-				&& Object.class.equals(attributeType)
-				&& genericAttributeType instanceof TypeVariable) {
+		if (Object.class.equals(attributeType) && attributeType != genericAttributeType) {
 			AtomicReference<Type[]> elementGenericTypeArgs
 					= new AtomicReference<Type[]>(PodamConstants.NO_TYPES);
 			realAttributeType = TypeManufacturerUtil.resolveGenericParameter(genericAttributeType,
@@ -922,43 +860,65 @@ public class PodamFactoryImpl implements PodamFactory {
 		} else {
 			realAttributeType = attributeType;
 		}
-
-		Type[] genericTypeArgsAll = TypeManufacturerUtil.mergeActualAndSuppliedGenericTypes(
-					attributeType, genericAttributeType, genericTypeArgs, typeArgsMap);
-
 		AttributeMetadata attributeMetadata = new AttributeMetadata(
-				attributeName, realAttributeType, genericAttributeType,
-				genericTypeArgsAll, annotations, pojoClass, pojo);
+				attributeName, realAttributeType, genericTypeArgs, annotations,
+				pojoClass);
 
-		if (realAttributeType.isArray()) {
+		if (realAttributeType.isPrimitive() || TypeManufacturerUtil.isWrapper(realAttributeType) ||
+                realAttributeType.equals(String.class)) {
+
+			attributeValue = TypeManufacturerUtil.getTypeValue(strategy, messageChannel, attributeMetadata,
+                    realAttributeType.getName());
+
+
+		} else if (realAttributeType.isArray()) {
 
 			// Array type
 
-			attributeValue = resolveArrayElementValue(pojo, manufacturingCtx,
-					attributeMetadata, typeArgsMap);
+			attributeValue = resolveArrayElementValue(realAttributeType,
+					genericAttributeType, attributeName, manufacturingCtx, annotations, pojo,
+					typeArgsMap);
 
 			// Collection
 		} else if (Collection.class.isAssignableFrom(realAttributeType)) {
 
 			attributeValue = resolveCollectionValueWhenCollectionIsPojoAttribute(
-					pojo, manufacturingCtx, attributeMetadata, typeArgsMap);
+                    pojo, manufacturingCtx, realAttributeType, attributeName,
+                    annotations, typeArgsMap, genericTypeArgs);
 
             // Map
 		} else if (Map.class.isAssignableFrom(realAttributeType)) {
 
 			attributeValue = resolveMapValueWhenMapIsPojoAttribute(pojo,
-					manufacturingCtx, attributeMetadata, typeArgsMap);
+					manufacturingCtx, realAttributeType, attributeName, annotations,
+					typeArgsMap, genericTypeArgs);
+
+            //Enum
+		} else if (realAttributeType.isEnum()) {
+
+            attributeValue = TypeManufacturerUtil.getTypeValue(strategy, messageChannel, attributeMetadata,
+                    PodamConstants.ENUMERATION_QUALIFIER);
+
+            //Parametrized type
+		} else if (Type.class.isAssignableFrom(realAttributeType)) {
+
+			attributeValue = TypeManufacturerUtil.getTypeValueForGenericTypes(strategy, messageChannel, attributeMetadata,
+                    genericAttributeType, typeArgsMap, PodamConstants.GENERIC_TYPE_QUALIFIER);
 
 		}
 
 		// For any other type, we use the PODAM strategy
 		if (attributeValue == null) {
 
+			TypeVariable<?>[] typeParams = attributeType.getTypeParameters();
+			Type[] genericTypeArgsAll = TypeManufacturerUtil.mergeActualAndSuppliedGenericTypes(
+                    typeParams, genericTypeArgs, typeArgsMap);
+
 			Integer depth = manufacturingCtx.getPojos().get(realAttributeType);
 			if (depth == null) {
-				depth = 0;
+				depth = -1;
 			}
-			if (depth < strategy.getMaxDepth(pojoClass)) {
+			if (depth <= strategy.getMaxDepth(pojoClass)) {
 
 				manufacturingCtx.getPojos().put(realAttributeType, depth + 1);
 
@@ -969,7 +929,7 @@ public class PodamFactoryImpl implements PodamFactory {
 			} else {
 
 				attributeValue = resortToExternalFactory(manufacturingCtx,
-						"Loop of depth " +  depth + " in {} production detected. Resorting to {} external factory",
+						"Loop in {} production detected. Resorting to {} external factory",
 						realAttributeType, genericTypeArgsAll);
 
 			}
@@ -1017,11 +977,19 @@ public class PodamFactoryImpl implements PodamFactory {
 	 *            The POJO being analyzed
 	 * @param manufacturingCtx
 	 *            the manufacturing context
-	 * @param attributeMetadata
-	 *            The attribute's metadata
+	 * @param collectionType
+	 *            The type of the attribute being evaluated
+	 * @param annotations
+	 *            The set of annotations for the annotated attribute. It might
+	 *            be empty
+	 * @param attributeName
+	 *            The name of the field being set
 	 * @param typeArgsMap
 	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
 	 *            example) with their actual types
+	 * @param genericTypeArgs
+	 *            The generic type arguments for the current generic class
+	 *            instance
 	 * @return a collection of some sort with some data in it
 	 * @throws PodamMockeryException
 	 *             An exception occurred while resolving the collection
@@ -1030,32 +998,18 @@ public class PodamFactoryImpl implements PodamFactory {
 	 */
 	private Collection<? super Object> resolveCollectionValueWhenCollectionIsPojoAttribute(
 			Object pojo, ManufacturingContext manufacturingCtx,
-			AttributeMetadata attributeMetadata, Map<String, Type> typeArgsMap) {
-
-		String attributeName = attributeMetadata.getAttributeName();
+			Class<?> collectionType, String attributeName,
+			List<Annotation> annotations, Map<String, Type> typeArgsMap,
+			Type... genericTypeArgs) {
 
 		// This needs to be generic because collections can be of any type
-		Collection<Object> defaultValue = null;
-		if (null != pojo && !Character.isDigit(attributeName.charAt(0))) {
+		Collection<? super Object> retValue = null;
+		if (null != pojo && null != attributeName) {
 
-			defaultValue = PodamUtils.getFieldValue(pojo, attributeName);
+			retValue = PodamUtils.getFieldValue(pojo, attributeName);
 		}
 
-		Collection<Object> retValue = null;
-		if (null != defaultValue &&
-				(defaultValue.getClass().getModifiers() & Modifier.PRIVATE) == 0) {
-			/* Default collection, which is not immutable */
-			retValue = defaultValue;
-		} else {
-
-			@SuppressWarnings("unchecked")
-			Class<Collection<Object>> collectionType
-					= (Class<Collection<Object>>) attributeMetadata.getAttributeType();
-			retValue = strategy.getTypeValue(attributeMetadata, typeArgsMap, collectionType);
-			if (null != retValue && null != defaultValue) {
-				retValue.addAll(defaultValue);
-			}
-		}
+		retValue = TypeManufacturerUtil.resolveCollectionType(collectionType, retValue);
 
 		if (null == retValue) {
 			return null;
@@ -1067,20 +1021,23 @@ public class PodamFactoryImpl implements PodamFactory {
 
 			AtomicReference<Type[]> elementGenericTypeArgs = new AtomicReference<Type[]>(
 					PodamConstants.NO_TYPES);
-			if (ArrayUtils.isEmpty(attributeMetadata.getAttrGenericArgs())) {
+			if (genericTypeArgs == null || genericTypeArgs.length == 0) {
 
- 				typeClass = findInheretedCollectionElementType(retValue,
-						manufacturingCtx, elementGenericTypeArgs, typeArgsMap, attributeMetadata.getAttrGenericArgs());
+				LOG.warn("The collection attribute: "
+						+ attributeName
+						+ " does not have a type. We will assume Object for you");
+				// Support for non-generified collections
+				typeClass = Object.class;
+
 			} else {
-				Type actualTypeArgument = attributeMetadata.getAttrGenericArgs()[0];
+				Type actualTypeArgument = genericTypeArgs[0];
 
 				typeClass = TypeManufacturerUtil.resolveGenericParameter(actualTypeArgument,
                         typeArgsMap, elementGenericTypeArgs);
 			}
 
-			fillCollection(manufacturingCtx,
-					attributeMetadata.getAttributeAnnotations(), attributeName,
-					retValue, typeClass, elementGenericTypeArgs.get());
+			fillCollection(manufacturingCtx, annotations, attributeName, retValue, typeClass,
+					elementGenericTypeArgs.get());
 
 		} catch (SecurityException e) {
 			throw new PodamMockeryException(RESOLVING_COLLECTION_EXCEPTION_STR,
@@ -1106,35 +1063,51 @@ public class PodamFactoryImpl implements PodamFactory {
 	}
 
 	/**
-	 * Tries to find collection element type from collection object
+	 * It fills a collection with the required number of elements of the
+	 * required type.
+	 *
+	 * <p>
+	 * This method has a so-called side effect. It updates the collection passed
+	 * as argument.
+	 * </p>
 	 *
 	 * @param collection
-	 *          The collection to be filled
+	 *          The Collection to be filled
 	 * @param manufacturingCtx
 	 *          the manufacturing context
-	 * @param elementGenericTypeArgs
-	 *          parameter to return generic arguments of collection element
 	 * @param typeArgsMap
 	 *          a map relating the generic class arguments ("&lt;T, V&gt;" for
 	 *          example) with their actual types
 	 * @param genericTypeArgs
 	 *          The generic type arguments for the current generic class
 	 *          instance
-	 * @return
-	 *        class type of collection element
+	 * @throws InstantiationException
+	 *          If an exception occurred during instantiation
+	 * @throws IllegalAccessException
+	 *          If security was violated while creating the object
+	 * @throws InvocationTargetException
+	 *          If an exception occurred while invoking the constructor or
+	 *          factory method
+	 * @throws ClassNotFoundException
+	 *          If it was not possible to create a class from a string
+	 *
 	 */
-	private Class<?> findInheretedCollectionElementType(
-			Collection<Object> collection, ManufacturingContext manufacturingCtx,
-			AtomicReference<Type[]> elementGenericTypeArgs,
-			Map<String, Type> typeArgsMap, Type... genericTypeArgs) {
+	private void fillCollection(Collection<? super Object> collection,
+			ManufacturingContext manufacturingCtx, Map<String, Type> typeArgsMap,
+			Type... genericTypeArgs)
+			throws InstantiationException, IllegalAccessException,
+			InvocationTargetException, ClassNotFoundException {
 
 		Class<?> pojoClass = collection.getClass();
+		Annotation[] annotations = collection.getClass().getAnnotations();
+		AtomicReference<Type[]> elementGenericTypeArgs = new AtomicReference<Type[]>(
+				PodamConstants.NO_TYPES);
 		Class<?> collectionClass = pojoClass;
 		Type[] typeParams = collectionClass.getTypeParameters();
 		main : while (typeParams.length < 1) {
 			for (Type genericIface : collectionClass.getGenericInterfaces()) {
-				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(
-						genericIface,typeArgsMap, elementGenericTypeArgs);
+				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(genericIface,
+                        typeArgsMap, elementGenericTypeArgs);
 				if (Collection.class.isAssignableFrom(clazz)) {
 					collectionClass = clazz;
 					typeParams = elementGenericTypeArgs.get();
@@ -1143,8 +1116,8 @@ public class PodamFactoryImpl implements PodamFactory {
 			}
 			Type type = collectionClass.getGenericSuperclass();
 			if (type != null) {
-				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(
-						type, typeArgsMap, elementGenericTypeArgs);
+				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(type, typeArgsMap,
+                        elementGenericTypeArgs);
 				if (Collection.class.isAssignableFrom(clazz)) {
 					collectionClass = clazz;
 					typeParams = elementGenericTypeArgs.get();
@@ -1158,11 +1131,12 @@ public class PodamFactoryImpl implements PodamFactory {
 			}
 		}
 		Class<?> elementTypeClass = TypeManufacturerUtil.resolveGenericParameter(typeParams[0],
-					typeArgsMap, elementGenericTypeArgs);
-		Type[] elementGenericArgs = ArrayUtils.addAll(
-				elementGenericTypeArgs.get(), genericTypeArgs);
-		elementGenericTypeArgs.set(elementGenericArgs);
-		return elementTypeClass;
+                typeArgsMap, elementGenericTypeArgs);
+		Type[] elementGenericArgs = TypeManufacturerUtil.mergeTypeArrays(elementGenericTypeArgs.get(),
+                genericTypeArgs);
+		String attributeName = null;
+		fillCollection(manufacturingCtx, Arrays.asList(annotations), attributeName,
+				collection, elementTypeClass, elementGenericArgs);
 	}
 
 	/**
@@ -1223,14 +1197,23 @@ public class PodamFactoryImpl implements PodamFactory {
 			for (int i = collection.size(); i < nbrElements; i++) {
 
 				// The default
-				Object element = TypeManufacturerUtil.returnAttributeDataStrategyValue(
-							collectionElementType, annotations, elementStrategy);
-
-				if (null == element) {
-
+				Object element;
+				if (null != elementStrategy
+						&& (elementStrategy instanceof ObjectStrategy)
+								&& Object.class.equals(collectionElementType)) {
+					LOG.debug("Element strategy is ObjectStrategy and collection element is of type Object: using the ObjectStrategy strategy");
+					element = elementStrategy.getValue();
+				} else if (null != elementStrategy
+						&& !(elementStrategy instanceof ObjectStrategy)) {
+					LOG.debug("Collection elements will be filled using the following strategy: "
+							+ elementStrategy);
+					element = TypeManufacturerUtil.returnAttributeDataStrategyValue(
+                            collectionElementType, elementStrategy);
+				} else {
+					Map<String, Type> nullTypeArgsMap = new HashMap<String, Type>();
 					element = manufactureAttributeValue(collection, manufacturingCtx,
 							collectionElementType, collectionElementType,
-							annotations, attributeName, NULL_TYPE_ARGS_MAP, genericTypeArgs);
+							annotations, attributeName, nullTypeArgsMap, genericTypeArgs);
 				}
 				collection.add(element);
 			}
@@ -1247,11 +1230,18 @@ public class PodamFactoryImpl implements PodamFactory {
 	 *            The POJO being initialized
 	 * @param manufacturingCtx
 	 *            the manufacturing context
-	 * @param attributeMetadata
-	 *            The attribute's metadata
+	 * @param attributeType
+	 *            The type of the POJO map attribute
+	 * @param attributeName
+	 *            The POJO attribute name
+	 * @param annotations
+	 *            The annotations specified for this attribute
 	 * @param typeArgsMap
 	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
 	 *            example) with their actual types
+	 * @param genericTypeArgs
+	 *            The generic type arguments for the current generic class
+	 *            instance
 	 * @return Map with at least one element in it
 	 *
 	 * @throws IllegalArgumentException
@@ -1266,31 +1256,17 @@ public class PodamFactoryImpl implements PodamFactory {
 	 */
 	private Map<? super Object, ? super Object> resolveMapValueWhenMapIsPojoAttribute(
 			Object pojo, ManufacturingContext manufacturingCtx,
-			AttributeMetadata attributeMetadata, Map<String, Type> typeArgsMap) {
+			Class<?> attributeType, String attributeName,
+			List<Annotation> annotations, Map<String, Type> typeArgsMap,
+			Type... genericTypeArgs) {
 
-		String attributeName = attributeMetadata.getAttributeName();
+		Map<? super Object, ? super Object> retValue = null;
+		if (null != pojo && null != attributeName) {
 
-		Map<Object, Object> defaultValue = null;
-		if (null != pojo && !Character.isDigit(attributeName.charAt(0))) {
-
-			defaultValue = PodamUtils.getFieldValue(pojo, attributeName);
+			retValue = PodamUtils.getFieldValue(pojo, attributeName);
 		}
 
-		Map<Object, Object> retValue;
-		if (null != defaultValue &&
-				(defaultValue.getClass().getModifiers() & Modifier.PRIVATE) == 0) {
-			/* Default map, which is not immutable */
-			retValue = defaultValue;
-		} else {
-
-			@SuppressWarnings("unchecked")
-			Class<Map<Object,Object>> mapType
-					= (Class<Map<Object, Object>>) attributeMetadata.getAttributeType();
-			retValue = strategy.getTypeValue(attributeMetadata, typeArgsMap, mapType);
-			if (null != retValue && null != defaultValue) {
-				retValue.putAll(defaultValue);
-			}
-		}
+		retValue = TypeManufacturerUtil.resolveMapType(attributeType, retValue);
 
 		if (null == retValue) {
 			return null;
@@ -1306,26 +1282,25 @@ public class PodamFactoryImpl implements PodamFactory {
 					PodamConstants.NO_TYPES);
 			AtomicReference<Type[]> elementGenericTypeArgs = new AtomicReference<Type[]>(
 					PodamConstants.NO_TYPES);
-			if (ArrayUtils.isEmpty(attributeMetadata.getAttrGenericArgs())) {
+			if (genericTypeArgs == null || genericTypeArgs.length == 0) {
 
-				MapArguments mapArgs = findInheretedMapElementType(retValue,
-						manufacturingCtx, typeArgsMap,
-						attributeMetadata.getAttrGenericArgs());
+				LOG.warn("Map attribute: "
+						+ attributeName
+						+ " is non-generic. We will assume a Map<Object, Object> for you.");
 
-				keyClass = mapArgs.getKeyOrValueType();
+				keyClass = Object.class;
 
-				elementClass = mapArgs.getElementClass();
+				elementClass = Object.class;
 
 			} else {
 
 				// Expected only key, value type
-				if (attributeMetadata.getAttrGenericArgs().length != 2) {
+				if (genericTypeArgs.length != 2) {
 					throw new IllegalStateException(
-							"In a Map only key value generic type are expected,"
-							+ "but received " + Arrays.toString(attributeMetadata.getAttrGenericArgs()));
+							"In a Map only key value generic type are expected.");
 				}
 
-				Type[] actualTypeArguments = attributeMetadata.getAttrGenericArgs();
+				Type[] actualTypeArguments = genericTypeArgs;
 				keyClass = TypeManufacturerUtil.resolveGenericParameter(actualTypeArguments[0],
 						typeArgsMap, keyGenericTypeArgs);
 				elementClass = TypeManufacturerUtil.resolveGenericParameter(actualTypeArguments[1],
@@ -1334,9 +1309,9 @@ public class PodamFactoryImpl implements PodamFactory {
 
 			MapArguments mapArguments = new MapArguments();
 			mapArguments.setAttributeName(attributeName);
-			mapArguments.getAnnotations().addAll(attributeMetadata.getAttributeAnnotations());
+			mapArguments.setAnnotations(annotations);
 			mapArguments.setMapToBeFilled(retValue);
-			mapArguments.setKeyOrValueType(keyClass);
+			mapArguments.setKeyClass(keyClass);
 			mapArguments.setElementClass(elementClass);
 			mapArguments.setKeyGenericTypeArgs(keyGenericTypeArgs.get());
 			mapArguments
@@ -1360,10 +1335,15 @@ public class PodamFactoryImpl implements PodamFactory {
 	}
 
 	/**
-	 * Finds key and element type arguments 
+	 * It fills a Map with the required number of elements of the required type.
+	 *
+	 * <p>
+	 * This method has a so-called side-effect. It updates the Map given as
+	 * argument.
+	 * </p>
 	 *
 	 * @param map
-	 *          The map being initialized
+	 *          The map being initialised
 	 * @param manufacturingCtx
 	 *          the manufacturing context
 	 * @param typeArgsMap
@@ -1372,13 +1352,22 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @param genericTypeArgs
 	 *          The generic type arguments for the current generic class
 	 *          instance
-	 * @return
-	 *        Inherited map key and element types
+	 * @throws InstantiationException
+	 *          If an exception occurred during instantiation
+	 * @throws IllegalAccessException
+	 *          If security was violated while creating the object
+	 * @throws InvocationTargetException
+	 *          If an exception occurred while invoking the constructor or
+	 *          factory method
+	 * @throws ClassNotFoundException
+	 *          If it was not possible to create a class from a string
 	 *
 	 */
-	private MapArguments findInheretedMapElementType(Map<Object, Object> map,
+	private void fillMap(Map<? super Object, ? super Object> map,
 			ManufacturingContext manufacturingCtx, Map<String, Type> typeArgsMap,
-			Type... genericTypeArgs) {
+			Type... genericTypeArgs)
+			throws InstantiationException, IllegalAccessException,
+			InvocationTargetException, ClassNotFoundException {
 
 		Class<?> pojoClass = map.getClass();
 		Class<?> mapClass = pojoClass;
@@ -1387,8 +1376,8 @@ public class PodamFactoryImpl implements PodamFactory {
 		Type[] typeParams = mapClass.getTypeParameters();
 		main : while (typeParams.length < 2) {
 			for (Type genericIface : mapClass.getGenericInterfaces()) {
-				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(
-						genericIface, typeArgsMap, elementGenericTypeArgs);
+				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(genericIface, typeArgsMap,
+                        elementGenericTypeArgs);
 				if (Map.class.isAssignableFrom(clazz)) {
 					typeParams = elementGenericTypeArgs.get();
 					mapClass = clazz;
@@ -1397,8 +1386,8 @@ public class PodamFactoryImpl implements PodamFactory {
 			}
 			Type type = mapClass.getGenericSuperclass();
 			if (type != null) {
-				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(
-						type, typeArgsMap, elementGenericTypeArgs);
+				Class<?> clazz = TypeManufacturerUtil.resolveGenericParameter(type, typeArgsMap,
+                        elementGenericTypeArgs);
 				if (Map.class.isAssignableFrom(clazz)) {
 					typeParams = elementGenericTypeArgs.get();
 					mapClass = clazz;
@@ -1414,26 +1403,24 @@ public class PodamFactoryImpl implements PodamFactory {
 		AtomicReference<Type[]> keyGenericTypeArgs = new AtomicReference<Type[]>(
 				PodamConstants.NO_TYPES);
 		Class<?> keyClass = TypeManufacturerUtil.resolveGenericParameter(typeParams[0],
-					typeArgsMap, keyGenericTypeArgs);
-		Class<?> elementClass = TypeManufacturerUtil.resolveGenericParameter(
-				typeParams[1], typeArgsMap, elementGenericTypeArgs);
+                typeArgsMap, keyGenericTypeArgs);
+		Class<?> elementClass = TypeManufacturerUtil.resolveGenericParameter(typeParams[1],
+                typeArgsMap, elementGenericTypeArgs);
 
-		Type[] keyGenericArgs = ArrayUtils.addAll(keyGenericTypeArgs.get(),
-				genericTypeArgs);
-		Type[] elementGenericArgs = ArrayUtils.addAll(elementGenericTypeArgs.get(),
-				genericTypeArgs);
+		Type[] keyGenericArgs = TypeManufacturerUtil.mergeTypeArrays(keyGenericTypeArgs.get(),
+                genericTypeArgs);
+		Type[] elementGenericArgs = TypeManufacturerUtil.mergeTypeArrays(elementGenericTypeArgs.get(),
+                genericTypeArgs);
 
 		MapArguments mapArguments = new MapArguments();
-		for (Annotation annotation : pojoClass.getAnnotations()) {
-			mapArguments.getAnnotations().add(annotation);
-		}
+		mapArguments.setAnnotations(Arrays.asList(pojoClass.getAnnotations()));
 		mapArguments.setMapToBeFilled(map);
-		mapArguments.setKeyOrValueType(keyClass);
+		mapArguments.setKeyClass(keyClass);
 		mapArguments.setElementClass(elementClass);
 		mapArguments.setKeyGenericTypeArgs(keyGenericArgs);
 		mapArguments.setElementGenericTypeArgs(elementGenericArgs);
 
-		return mapArguments;
+		fillMap(mapArguments, manufacturingCtx);
 	}
 
 	/**
@@ -1491,8 +1478,8 @@ public class PodamFactoryImpl implements PodamFactory {
 				MapKeyOrElementsArguments valueArguments = new MapKeyOrElementsArguments();
 				valueArguments.setAttributeName(mapArguments.getAttributeName());
 				valueArguments.setMapToBeFilled(mapArguments.getMapToBeFilled());
-				valueArguments.getAnnotations().addAll(mapArguments.getAnnotations());
-				valueArguments.setKeyOrValueType(mapArguments.getKeyOrValueType());
+				valueArguments.setAnnotations(mapArguments.getAnnotations());
+				valueArguments.setKeyOrValueType(mapArguments.getKeyClass());
 				valueArguments.setElementStrategy(keyStrategy);
 				valueArguments.setGenericTypeArgs(mapArguments
 						.getKeyGenericTypeArgs());
@@ -1549,14 +1536,28 @@ public class PodamFactoryImpl implements PodamFactory {
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
 
-		AttributeStrategy<?> strategy = keyOrElementsArguments.getElementStrategy();
-		Object retValue = TypeManufacturerUtil.returnAttributeDataStrategyValue(
-					keyOrElementsArguments.getKeyOrValueType(),
-					keyOrElementsArguments.getAnnotations(),
-					strategy);
+		Object retValue = null;
 
-		if (null == retValue) {
+		if (null != keyOrElementsArguments.getElementStrategy()
+				&& ObjectStrategy.class.isAssignableFrom(keyOrElementsArguments
+						.getElementStrategy().getClass())
+				&& Object.class.equals(keyOrElementsArguments
+						.getKeyOrValueType())) {
+			LOG.debug("Element strategy is ObjectStrategy and Map key or value type is of type Object: using the ObjectStrategy strategy");
+			retValue = keyOrElementsArguments.getElementStrategy().getValue();
+		} else if (null != keyOrElementsArguments.getElementStrategy()
+				&& !ObjectStrategy.class
+						.isAssignableFrom(keyOrElementsArguments
+								.getElementStrategy().getClass())) {
+			LOG.debug("Map key or value will be filled using the following strategy: "
+					+ keyOrElementsArguments.getElementStrategy());
+			retValue = TypeManufacturerUtil.returnAttributeDataStrategyValue(
+                    keyOrElementsArguments.getKeyOrValueType(),
+                    keyOrElementsArguments.getElementStrategy());
 
+		} else {
+
+			Map<String, Type> nullTypeArgsMap = new HashMap<String, Type>();
 			retValue = manufactureAttributeValue(
 					keyOrElementsArguments.getMapToBeFilled(),
 					manufacturingCtx,
@@ -1564,114 +1565,28 @@ public class PodamFactoryImpl implements PodamFactory {
 					keyOrElementsArguments.getKeyOrValueType(),
 					keyOrElementsArguments.getAnnotations(),
 					keyOrElementsArguments.getAttributeName(),
-					NULL_TYPE_ARGS_MAP,
+					nullTypeArgsMap,
 					keyOrElementsArguments.getGenericTypeArgs());
 		}
 		return retValue;
 	}
 
 	/**
-	 * It fills an Array with the required number of elements of the required type.
-	 *
-	 * <p>
-	 * This method has a so-called side-effect. It updates the Map given as
-	 * argument.
-	 * </p>
-	 *
-	 * @param array
-	 *             The array POJO
-	 * @param attributeName
-	 *            The attribute name of collection in enclosing POJO class 
-	 * @param elementType
-	 *            The generic type of the collection element
-	 * @param genericElementType
-	 *            The generic type of the collection element
-	 * @param annotations
-	 *            The annotations for this attribute
-	 * @param manufacturingCtx
-	 *             Manufacturing context
-	 * @param typeArgsMap
-	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
-	 *            example) with their actual types
-	 * @throws InstantiationException
-	 *             If an exception occurred during instantiation
-	 * @throws IllegalAccessException
-	 *             If security was violated while creating the object
-	 * @throws InvocationTargetException
-	 *             If an exception occurred while invoking the constructor or
-	 *             factory method
-	 * @throws ClassNotFoundException
-	 *             If it was not possible to create a class from a string
-	 *
-	 */
-	private void fillArray(Object array, String attributeName, Class<?> elementType,
-			Type genericElementType, List<Annotation> annotations,
-			ManufacturingContext manufacturingCtx,
-			Map<String, Type> typeArgsMap)
-			throws InstantiationException, IllegalAccessException,
-			InvocationTargetException, ClassNotFoundException {
-
-		Class<?> componentType = array.getClass().getComponentType();
-		Type genericComponentType;
-		AtomicReference<Type[]> genericTypeArgs = new AtomicReference<Type[]>(
-				PodamConstants.NO_TYPES);
-		if (genericElementType instanceof GenericArrayType) {
-			genericComponentType = ((GenericArrayType) genericElementType).getGenericComponentType();
-			if (genericComponentType instanceof TypeVariable) {
-				TypeVariable<?> componentTypeVariable
-						 = (TypeVariable<?>) genericComponentType;
-				final Type resolvedType
-						 = typeArgsMap.get(componentTypeVariable.getName());
-				componentType
-						 = TypeManufacturerUtil.resolveGenericParameter(resolvedType, typeArgsMap,
-								genericTypeArgs);
-			}
-		} else {
-			genericComponentType = componentType;
-		}
-
-		// If the user defined a strategy to fill the collection elements,
-		// we use it
-		Holder<AttributeStrategy<?>> elementStrategyHolder
-				= new Holder<AttributeStrategy<?>>();
-		Holder<AttributeStrategy<?>> keyStrategyHolder = null;
-		TypeManufacturerUtil.findCollectionSize(strategy,
-				annotations, elementType,
-				elementStrategyHolder, keyStrategyHolder);
-		AttributeStrategy<?> elementStrategy = elementStrategyHolder.value;
-
-		int nbrElements = Array.getLength(array);
-		for (int i = 0; i < nbrElements; i++) {
-
-			Object arrayElement = Array.get(array, i);
-
-			if (null == arrayElement || arrayElement.getClass().isPrimitive() || arrayElement instanceof Number) {
-				// The default
-				arrayElement = TypeManufacturerUtil.returnAttributeDataStrategyValue(
-						componentType, annotations, elementStrategy);
-
-				if (null == arrayElement) {
-					arrayElement = manufactureAttributeValue(array, manufacturingCtx,
-							componentType, genericComponentType,
-							annotations, attributeName,
-							typeArgsMap, genericTypeArgs.get());
-				}
-
-				Array.set(array, i, arrayElement);
-			}
-		}
-	}
-
-	/**
 	 * It returns an Array with the first element set
 	 *
 	 *
-	 * @param pojo
-	 *            POJO containing attribute
+	 * @param attributeType
+	 *            The array type
+	 * @param genericType
+	 *            The array generic type
+	 * @param attributeName
+	 *            The array attribute name in enclosing POJO class
 	 * @param manufacturingCtx
 	 *          the manufacturing context
-	 * @param attributeMetadata
-	 *            The attribute's metadata
+	 * @param annotations
+	 *            The annotations to be considered
+	 * @param pojo
+	 *            POJO containing attribute
 	 * @param typeArgsMap
 	 *            a map relating the generic class arguments ("&lt;T, V&gt;" for
 	 *            example) with their actual types
@@ -1688,22 +1603,78 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws ClassNotFoundException
 	 *             If it was not possible to create a class from a string
 	 */
-	private Object resolveArrayElementValue(Object pojo,
-			ManufacturingContext manufacturingCtx,
-			AttributeMetadata attributeMetadata,
+	private Object resolveArrayElementValue(Class<?> attributeType,
+			Type genericType, String attributeName, ManufacturingContext manufacturingCtx,
+			List<Annotation> annotations, Object pojo,
 			Map<String, Type> typeArgsMap) throws InstantiationException,
 			IllegalAccessException, InvocationTargetException,
 			ClassNotFoundException {
 
-		@SuppressWarnings("unchecked")
-		Class<Object> arrayType
-				= (Class<Object>) attributeMetadata.getAttributeType();
-		Object array = strategy.getTypeValue(attributeMetadata, typeArgsMap, arrayType);
-		fillArray(array, attributeMetadata.getAttributeName(),
-				attributeMetadata.getAttributeType(),
-				attributeMetadata.getAttributeGenericType(),
-				attributeMetadata.getAttributeAnnotations(),
-				manufacturingCtx, typeArgsMap);
+		Class<?> componentType = null;
+		Type genericComponentType = null;
+		AtomicReference<Type[]> genericTypeArgs = new AtomicReference<Type[]>(
+				PodamConstants.NO_TYPES);
+		if (genericType instanceof GenericArrayType) {
+			genericComponentType = ((GenericArrayType) genericType).getGenericComponentType();
+			if (genericComponentType instanceof TypeVariable) {
+				TypeVariable<?> componentTypeVariable
+						= (TypeVariable<?>) genericComponentType;
+				final Type resolvedType
+						= typeArgsMap.get(componentTypeVariable.getName());
+				componentType
+						= TypeManufacturerUtil.resolveGenericParameter(resolvedType, typeArgsMap,
+                        genericTypeArgs);
+			}
+		} else if (genericType instanceof Class) {
+			Class<?> arrayClass = (Class<?>) genericType;
+			genericComponentType = arrayClass.getComponentType();
+		} else {
+			genericComponentType = attributeType.getComponentType();
+		}
+
+		if (componentType == null) {
+			componentType = attributeType.getComponentType();
+		}
+
+		// If the user defined a strategy to fill the collection elements,
+		// we use it
+		Holder<AttributeStrategy<?>> elementStrategyHolder
+				= new Holder<AttributeStrategy<?>>();
+		Holder<AttributeStrategy<?>> keyStrategyHolder = null;
+		Integer nbrElements = TypeManufacturerUtil.findCollectionSize(strategy, annotations, attributeType,
+                elementStrategyHolder, keyStrategyHolder);
+		AttributeStrategy<?> elementStrategy = elementStrategyHolder.value;
+
+		Object arrayElement = null;
+		Object array = Array.newInstance(componentType, nbrElements);
+
+		for (int i = 0; i < nbrElements; i++) {
+
+			// The default
+			if (null != elementStrategy
+					&& (elementStrategy instanceof ObjectStrategy)
+					&& Object.class.equals(componentType)) {
+				LOG.debug("Element strategy is ObjectStrategy and array element is of type Object: using the ObjectStrategy strategy");
+				arrayElement = elementStrategy.getValue();
+			} else if (null != elementStrategy
+					&& !(elementStrategy instanceof ObjectStrategy)) {
+				LOG.debug("Array elements will be filled using the following strategy: "
+						+ elementStrategy);
+				arrayElement = TypeManufacturerUtil.returnAttributeDataStrategyValue(componentType,
+						elementStrategy);
+
+			} else {
+
+				arrayElement = manufactureAttributeValue(array, manufacturingCtx,
+						componentType, genericComponentType, annotations, attributeName,
+						typeArgsMap, genericTypeArgs.get());
+
+			}
+
+			Array.set(array, i, arrayElement);
+
+		}
+
 		return array;
 	}
 
@@ -1745,19 +1716,19 @@ public class PodamFactoryImpl implements PodamFactory {
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
 
+		Object[] parameterValues;
 		Class<?>[] parameterTypes = constructor.getParameterTypes();
 
 		if (parameterTypes.length == 0) {
 
-			return PodamConstants.NO_ARGS;
+			parameterValues = PodamConstants.NO_ARGS;
 
 		} else {
 
-			Object[] parameterValues = new Object[parameterTypes.length];
+			parameterValues = new Object[parameterTypes.length];
 
 			Annotation[][] parameterAnnotations = constructor.getParameterAnnotations();
 			Type[] genericTypes = constructor.getGenericParameterTypes();
-			String ctorName = Arrays.toString(genericTypes);
 
 			for (int idx = 0; idx < parameterTypes.length; idx++) {
 
@@ -1768,11 +1739,13 @@ public class PodamFactoryImpl implements PodamFactory {
 						genericTypes[idx] : parameterTypes[idx];
 
 				parameterValues[idx] = manufactureParameterValue(pojoClass,
-						idx + ctorName, parameterTypes[idx], genericType,
-						annotations, typeArgsMap, manufacturingCtx, genericTypeArgs);
+						parameterTypes[idx], genericType, annotations,
+						typeArgsMap, manufacturingCtx, genericTypeArgs);
 			}
-			return parameterValues;
 		}
+
+		return parameterValues;
+
 	}
 
 	/**
@@ -1812,19 +1785,19 @@ public class PodamFactoryImpl implements PodamFactory {
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
 
+		Object[] parameterValues;
 		Class<?>[] parameterTypes = method.getParameterTypes();
 
 		if (parameterTypes.length == 0) {
 
-			return PodamConstants.NO_ARGS;
+			parameterValues = PodamConstants.NO_ARGS;
 
 		} else {
 
-			Object[] parameterValues = new Object[parameterTypes.length];
+			parameterValues = new Object[parameterTypes.length];
 
 			Annotation[][] parameterAnnotations = method.getParameterAnnotations();
 			Type[] genericTypes = method.getGenericParameterTypes();
-			String methodName = Arrays.toString(genericTypes);
 
 			for (int idx = 0; idx < parameterTypes.length; idx++) {
 
@@ -1835,11 +1808,13 @@ public class PodamFactoryImpl implements PodamFactory {
 						genericTypes[idx] : parameterTypes[idx];
 
 				parameterValues[idx] = manufactureParameterValue(pojoClass,
-						idx + methodName, parameterTypes[idx], genericType,
-						annotations, typeArgsMap, manufacturingCtx, genericTypeArgs);
+						parameterTypes[idx], genericType, annotations,
+						typeArgsMap, manufacturingCtx, genericTypeArgs);
 			}
-			return parameterValues;
 		}
+
+		return parameterValues;
+
 	}
 
 	/**
@@ -1847,7 +1822,6 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * invoke it
 	 *
 	 * @param pojoClass pojo class
-	 * @param parameterName name of parameter
 	 * @param parameterType type of parameter
 	 * @param genericType generic type of parameter
 	 * @param annotations parameter annotations
@@ -1871,44 +1845,135 @@ public class PodamFactoryImpl implements PodamFactory {
 	 * @throws ClassNotFoundException
 	 *             If it was not possible to create a class from a string
 	 */
-	private Object manufactureParameterValue(Class<?> pojoClass,
-			String parameterName, Class<?> parameterType, Type genericType,
-			final List<Annotation> annotations, final Map<String, Type> typeArgsMap,
-			ManufacturingContext manufacturingCtx,
+	private Object manufactureParameterValue(Class<?> pojoClass, Class<?> parameterType,
+			Type genericType, List<Annotation> annotations,
+			final Map<String, Type> typeArgsMap, ManufacturingContext manufacturingCtx,
 			Type... genericTypeArgs)
 			throws InstantiationException, IllegalAccessException,
 			InvocationTargetException, ClassNotFoundException {
+
+		Object parameterValue = null;
 
 		AttributeStrategy<?> attributeStrategy
 				= TypeManufacturerUtil.findAttributeStrategy(strategy, annotations, parameterType);
 		if (null != attributeStrategy) {
 
-			return TypeManufacturerUtil.returnAttributeDataStrategyValue(
-					parameterType, annotations, attributeStrategy);
+			LOG.debug("The parameter: " + genericType
+                    + " will be filled using the following strategy: "
+                    + attributeStrategy);
+
+			return TypeManufacturerUtil.returnAttributeDataStrategyValue(parameterType,
+                    attributeStrategy);
 		}
 
-		Map<String, Type> typeArgsMapForParam;
-		if (genericType instanceof ParameterizedType) {
-			typeArgsMapForParam = new HashMap<String, Type>(typeArgsMap);
-			ParameterizedType parametrizedType =
-					(ParameterizedType) genericType;
+		if (Collection.class.isAssignableFrom(parameterType)) {
 
-			TypeVariable<?>[] argumentTypes = parameterType.getTypeParameters();
-			Type[] argumentGenericTypes = parametrizedType.getActualTypeArguments();
+			Collection<? super Object> defaultValue = null;
+			Collection<? super Object> collection = TypeManufacturerUtil.resolveCollectionType(
+                    parameterType, defaultValue);
 
-			for (int k = 0; k < argumentTypes.length; k++) {
-				if (argumentGenericTypes[k] instanceof Class) {
-					Class<?> genericParam = (Class<?>) argumentGenericTypes[k];
-					typeArgsMapForParam.put(argumentTypes[k].getName(), genericParam);
+			if (collection != null) {
+				Class<?> collectionElementType;
+				AtomicReference<Type[]> collectionGenericTypeArgs = new AtomicReference<Type[]>(
+						PodamConstants.NO_TYPES);
+				if (genericType instanceof ParameterizedType) {
+					ParameterizedType pType = (ParameterizedType) genericType;
+					Type actualTypeArgument = pType.getActualTypeArguments()[0];
+
+					collectionElementType = TypeManufacturerUtil.resolveGenericParameter(
+                            actualTypeArgument, typeArgsMap,
+                            collectionGenericTypeArgs);
+				} else {
+					LOG.warn("Collection parameter {} type is non-generic."
+							+ "We will assume a Collection<Object> for you.",
+							genericType);
+					collectionElementType = Object.class;
 				}
+
+				Type[] genericTypeArgsAll = TypeManufacturerUtil.mergeTypeArrays(
+                        collectionGenericTypeArgs.get(), genericTypeArgs);
+				String attributeName = null;
+				fillCollection(manufacturingCtx, annotations, attributeName,
+						collection, collectionElementType, genericTypeArgsAll);
+
+				parameterValue = collection;
 			}
-		} else {
-			typeArgsMapForParam = typeArgsMap;
+
+		} else if (Map.class.isAssignableFrom(parameterType)) {
+
+			Map<? super Object, ? super Object> defaultValue = null;
+			Map<? super Object, ? super Object> map = TypeManufacturerUtil.resolveMapType(parameterType, defaultValue);
+
+			if (map != null) {
+				Class<?> keyClass;
+				Class<?> elementClass;
+				AtomicReference<Type[]> keyGenericTypeArgs = new AtomicReference<Type[]>(
+						PodamConstants.NO_TYPES);
+				AtomicReference<Type[]> elementGenericTypeArgs = new AtomicReference<Type[]>(
+						PodamConstants.NO_TYPES);
+				if (genericType instanceof ParameterizedType) {
+					ParameterizedType pType = (ParameterizedType) genericType;
+					Type[] actualTypeArguments = pType.getActualTypeArguments();
+
+					keyClass = TypeManufacturerUtil.resolveGenericParameter(actualTypeArguments[0],
+							typeArgsMap, keyGenericTypeArgs);
+					elementClass = TypeManufacturerUtil.resolveGenericParameter(
+                            actualTypeArguments[1], typeArgsMap,
+                            elementGenericTypeArgs);
+				} else {
+					LOG.warn("Map parameter {} type is non-generic."
+							+ "We will assume a Map<Object,Object> for you.",
+							genericType);
+					keyClass = Object.class;
+					elementClass = Object.class;
+				}
+
+				Type[] genericTypeArgsAll = TypeManufacturerUtil.mergeTypeArrays(
+                        elementGenericTypeArgs.get(), genericTypeArgs);
+
+				MapArguments mapArguments = new MapArguments();
+				mapArguments.setAnnotations(annotations);
+				mapArguments.setMapToBeFilled(map);
+				mapArguments.setKeyClass(keyClass);
+				mapArguments.setElementClass(elementClass);
+				mapArguments.setKeyGenericTypeArgs(keyGenericTypeArgs.get());
+				mapArguments.setElementGenericTypeArgs(genericTypeArgsAll);
+
+				fillMap(mapArguments, manufacturingCtx);
+
+				parameterValue = map;
+			}
 		}
 
-		return manufactureAttributeValue(pojoClass, manufacturingCtx, parameterType,
-				genericType, annotations, parameterName, typeArgsMapForParam,
-				genericTypeArgs);
+		if (parameterValue == null) {
+
+			Map<String, Type> typeArgsMapForParam;
+			if (genericType instanceof ParameterizedType) {
+				typeArgsMapForParam = new HashMap<String, Type>(typeArgsMap);
+				ParameterizedType parametrizedType =
+						(ParameterizedType) genericType;
+
+				TypeVariable<?>[] argumentTypes = parameterType.getTypeParameters();
+				Type[] argumentGenericTypes = parametrizedType.getActualTypeArguments();
+
+				for (int k = 0; k < argumentTypes.length; k++) {
+					if (argumentGenericTypes[k] instanceof Class) {
+						Class<?> genericParam = (Class<?>) argumentGenericTypes[k];
+						typeArgsMapForParam.put(argumentTypes[k].getName(), genericParam);
+					}
+				}
+			} else {
+				typeArgsMapForParam = typeArgsMap;
+			}
+
+			String attributeName = null;
+
+			parameterValue = manufactureAttributeValue(pojoClass, manufacturingCtx, parameterType,
+					genericType, annotations, attributeName, typeArgsMapForParam,
+					genericTypeArgs);
+		}
+
+		return parameterValue;
 	}
 
     /**
@@ -1917,11 +1982,8 @@ public class PodamFactoryImpl implements PodamFactory {
      * @param pojoMetadata The Pojo metadata
      * @param manufacturingCtx The manufacturing context
      * @param genericTypeArgs The generic type arguments map
-     * @param typeArgsMap 
-     *            a map relating the generic class arguments ("&lt;T, V&gt;" for
-     *            example) with their actual types
      * @param <T> The type of the value to be returned
-     * @return a value or null, if manufacturing didn't succeed
+     * @return
      * @throws InstantiationException If a problem occurred while instantiating the object
      * @throws IllegalAccessException If a problem occurred while instantiating the object
      * @throws InvocationTargetException If a problem occurred while instantiating the object
@@ -1930,31 +1992,23 @@ public class PodamFactoryImpl implements PodamFactory {
     private <T> T getValueForAbstractType(Class<T> pojoClass,
                                           AttributeMetadata pojoMetadata,
                                           ManufacturingContext manufacturingCtx,
-                                          Map<String, Type> typeArgsMap,
-                                          Type[] genericTypeArgs)
-            throws InstantiationException, IllegalAccessException,
-            InvocationTargetException, ClassNotFoundException {
+                                          Type[] genericTypeArgs) throws InstantiationException,
+            IllegalAccessException, InvocationTargetException, ClassNotFoundException {
 
-        Class<? extends T> specificClass = strategy.getSpecificClass(pojoClass);
+        Class<T> specificClass = (Class<T>) strategy.getSpecificClass(pojoClass);
 
         if (!specificClass.equals(pojoClass)) {
 
             return this.manufacturePojoInternal(specificClass, pojoMetadata,
                     manufacturingCtx, genericTypeArgs);
-        }
 
-        Class<?> factory = strategy.getFactoryClass(pojoClass);
-        if (factory != null) {
-            T retValue = instantiatePojoWithFactory(factory, pojoClass,
-                manufacturingCtx, typeArgsMap, genericTypeArgs);
-            if (retValue != null) {
-                return retValue;
-            }
-        }
+        } else {
 
-        return resortToExternalFactory(manufacturingCtx,
-                "Cannot instantiate a class {}. Resorting to {} external factory",
-                pojoClass, genericTypeArgs);
+            return resortToExternalFactory(manufacturingCtx,
+                    "{} is an abstract class or interface. Resorting to {} external factory",
+                    pojoClass, genericTypeArgs);
+
+        }
     }
 
 

@@ -2,6 +2,7 @@ package uk.co.jemos.podam.api;
 
 import java.io.Serializable;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 
 import uk.co.jemos.podam.common.AttributeStrategy;
 
@@ -17,6 +18,9 @@ public class MapKeyOrElementsArguments extends AbstractMapArguments implements
 
 	private static final long serialVersionUID = 1L;
 
+	/** The Map key / element type. */
+	private Class<?> keyOrValueType;
+
 	/** The strategy to use to fill the Map key or value element. */
 	private AttributeStrategy<?> elementStrategy;
 
@@ -25,6 +29,21 @@ public class MapKeyOrElementsArguments extends AbstractMapArguments implements
 	 * instance.
 	 */
 	private Type[] genericTypeArgs;
+
+	/**
+	 * @return the keyOrValueType
+	 */
+	public Class<?> getKeyOrValueType() {
+		return keyOrValueType;
+	}
+
+	/**
+	 * @param keyOrValueType
+	 *            the keyOrValueType to set
+	 */
+	public void setKeyOrValueType(Class<?> keyOrValueType) {
+		this.keyOrValueType = keyOrValueType;
+	}
 
 	/**
 	 * @return the elementStrategy
@@ -56,4 +75,21 @@ public class MapKeyOrElementsArguments extends AbstractMapArguments implements
 		this.genericTypeArgs = genericTypeArgs.clone();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public String toString() {
+		StringBuilder builder = new StringBuilder();
+		builder.append("MapKeyOrElementsArguments [toString()=");
+		builder.append(super.toString());
+		builder.append(", keyOrValueType=");
+		builder.append(keyOrValueType);
+		builder.append(", elementStrategy=");
+		builder.append(elementStrategy);
+		builder.append(", genericTypeArgs=");
+		builder.append(Arrays.toString(genericTypeArgs));
+		builder.append("]");
+		return builder.toString();
+	}
 }

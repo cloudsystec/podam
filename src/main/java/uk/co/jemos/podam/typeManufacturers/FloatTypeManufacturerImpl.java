@@ -1,15 +1,12 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import org.apache.commons.lang3.StringUtils;
-
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamConstants;
 import uk.co.jemos.podam.common.PodamFloatValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default float type manufacturer.
@@ -18,79 +15,64 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class FloatTypeManufacturerImpl extends AbstractTypeManufacturer<Float> {
+public class FloatTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(FloatTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Float getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Float getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Float retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamFloatValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamFloatValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
+        Float retValue = null;
 
-            String numValueStr = annotationStrategy.numValue();
-            if (StringUtils.isNotEmpty(numValueStr)) {
-                try {
-                    retValue = Float.valueOf(numValueStr);
-                } catch (NumberFormatException nfe) {
-                    throw new IllegalArgumentException(PodamConstants.THE_ANNOTATION_VALUE_STR
-                            + numValueStr
-                            + " could not be converted to a Float. An exception will be thrown.",
-                            nfe);
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
+
+            if (PodamFloatValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamFloatValue floatStrategy = (PodamFloatValue) annotation;
+
+                String numValueStr = floatStrategy.numValue();
+                if (null != numValueStr && !"".equals(numValueStr)) {
+                    try {
+                        retValue = Float.valueOf(numValueStr);
+                    } catch (NumberFormatException nfe) {
+                        String errMsg = PodamConstants.THE_ANNOTATION_VALUE_STR
+                                + numValueStr
+                                + " could not be converted to a Float. An exception will be thrown.";
+                        LOG.error(errMsg);
+                        throw new IllegalArgumentException(errMsg, nfe);
+                    }
+                } else {
+
+                    float minValue = floatStrategy.minValue();
+                    float maxValue = floatStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getFloatInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
+
                 }
-            } else {
 
-                float minValue = annotationStrategy.minValue();
-                float maxValue = annotationStrategy.maxValue();
+                break;
 
-                // Sanity check
-                if (minValue > maxValue) {
-                    maxValue = minValue;
-                }
-
-                retValue = getFloatInRange(minValue, maxValue,
-                        attributeMetadata);
             }
-        } else {
-            retValue = getFloat(attributeMetadata);
+
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getFloat(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-	/** It returns a float/Float value.
-	 * 
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A float/Float value
-	 */
-	public Float getFloat(AttributeMetadata attributeMetadata) {
-
-		return (float)getDouble();
-	}
-
-	/**
-	 * It returns a float/Float value between min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A float/Float value between min and max value (included).
-	 */
-	public Float getFloatInRange(float minValue, float maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return (float)PodamUtils.getDoubleInRange(minValue, maxValue);
-	}
-
 }

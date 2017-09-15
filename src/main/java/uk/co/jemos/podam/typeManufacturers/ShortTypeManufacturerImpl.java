@@ -1,14 +1,11 @@
 package uk.co.jemos.podam.typeManufacturers;
 
-import org.apache.commons.lang3.StringUtils;
-
-import uk.co.jemos.podam.api.AttributeMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.jemos.podam.api.DataProviderStrategy;
-import uk.co.jemos.podam.api.PodamUtils;
 import uk.co.jemos.podam.common.PodamShortValue;
 
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.lang.annotation.Annotation;
 
 /**
  * Default short type manufacturer.
@@ -17,79 +14,63 @@ import java.util.Map;
  *
  * @since 6.0.0.RELEASE
  */
-public class ShortTypeManufacturerImpl extends AbstractTypeManufacturer<Short> {
+public class ShortTypeManufacturerImpl extends AbstractTypeManufacturer {
+
+    /** The application logger */
+    private static final Logger LOG = LoggerFactory.getLogger(ShortTypeManufacturerImpl.class);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Short getType(DataProviderStrategy strategy,
-            AttributeMetadata attributeMetadata,
-            Map<String, Type> genericTypesArgumentsMap) {
+    public Short getType(TypeManufacturerParamsWrapper wrapper) {
 
-        Short retValue;
+        super.checkWrapperIsValid(wrapper);
 
-        PodamShortValue annotationStrategy = findElementOfType(
-                attributeMetadata.getAttributeAnnotations(), PodamShortValue.class);
+        DataProviderStrategy strategy = wrapper.getDataProviderStrategy();
 
-        if (null != annotationStrategy) {
+        Short retValue = null;
 
-            String numValueStr = annotationStrategy.numValue();
-                if (StringUtils.isNotEmpty(numValueStr)) {
-                try {
-                    retValue = Short.valueOf(numValueStr);
-                } catch (NumberFormatException nfe) {
-                    throw new IllegalArgumentException("The precise value: "
-                            + numValueStr
-                            + " cannot be converted to a short type. An exception will be thrown.",
-                            nfe);
+        for (Annotation annotation : wrapper.getAttributeMetadata().getAttributeAnnotations()) {
+
+            if (PodamShortValue.class.isAssignableFrom(annotation.getClass())) {
+                PodamShortValue shortStrategy = (PodamShortValue) annotation;
+
+                String numValueStr = shortStrategy.numValue();
+                if (null != numValueStr && !"".equals(numValueStr)) {
+                    try {
+                        retValue = Short.valueOf(numValueStr);
+                    } catch (NumberFormatException nfe) {
+                        String errMsg = "The precise value: "
+                                + numValueStr
+                                + " cannot be converted to a short type. An exception will be thrown.";
+                        LOG.error(errMsg);
+                        throw new IllegalArgumentException(errMsg, nfe);
+                    }
+                } else {
+
+                    short minValue = shortStrategy.minValue();
+                    short maxValue = shortStrategy.maxValue();
+
+                    // Sanity check
+                    if (minValue > maxValue) {
+                        maxValue = minValue;
+                    }
+
+                    retValue = strategy.getShortInRange(minValue, maxValue,
+                            wrapper.getAttributeMetadata());
+
                 }
-            } else {
 
-                short minValue = annotationStrategy.minValue();
-                short maxValue = annotationStrategy.maxValue();
+                break;
 
-                // Sanity check
-                if (minValue > maxValue) {
-                    maxValue = minValue;
-                }
-
-                retValue = getShortInRange(minValue, maxValue,
-                        attributeMetadata);
             }
-        } else {
-            retValue = getShort(attributeMetadata);
+        }
+
+        if (retValue == null) {
+            retValue = strategy.getShort(wrapper.getAttributeMetadata());
         }
 
         return retValue;
     }
-
-    /** It returns a short/Short value.
-	 *
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A short/Short value.
-	 */
-	public Short getShort(AttributeMetadata attributeMetadata) {
-
-		return (short)getInteger(Short.MAX_VALUE);
-	}
-
-	/**
-	 * It returns a short/Short value between min and max value (included).
-	 * 
-	 * @param minValue
-	 *            The minimum value for the returned value
-	 * @param maxValue
-	 *            The maximum value for the returned value
-	 * @param attributeMetadata
-	 *            attribute metadata for instance to be fetched
-	 * @return A short/Short value between min and max value (included).
-	 */
-	public Short getShortInRange(short minValue, short maxValue,
-			AttributeMetadata attributeMetadata) {
-
-		return (short)PodamUtils.getIntegerInRange(minValue, maxValue);
-	}
-
 }
