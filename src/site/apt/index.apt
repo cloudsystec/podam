@@ -290,16 +290,14 @@ public static class Pojo {
 }
 +-----------------------------------
 
-  Define custom <TypeManufacturer>, which will be producing string values
-  depending on attribute name
+  Define custom <DataProviderStrategy>, which will be producing values
+  depending on attribute type
 
 +-----------------------------------
-public class CustomStringManufacturer extends StringTypeManufacturerImpl() {
+public class CustomProviderStrategy extends AbstractRandomDataProviderStrategy {
 
 	@Override
-	public String getType(DataProviderStrategy strategy,
-			AttributeMetadata attributeMetadata,
-			Map<String, Type> genericTypesArgumentsMap) {
+	public String getStringValue(AttributeMetadata attributeMetadata) {
 
 		if (Pojo.class.isAssignableFrom(attributeMetadata.getPojoClass())) {
 
@@ -309,17 +307,17 @@ public class CustomStringManufacturer extends StringTypeManufacturerImpl() {
 				return "00100";
 			}
 		}
-		return super.getType(strategy, attributeMetadata, genericTypesArgumentsMap);
-	};
+		return super.getStringValue(attributeMetadata);
+	}
 }
 +-----------------------------------
 
   Intantiate POJO with <PodamFactory>
 
 +-----------------------------------
-CustomStringManufacturer customStringManufacturer = new CustomStringManufacturer();
-PodamFactory factory = new PodamFactoryImpl();
-factory.getStrategy().addOrReplaceTypeManufacturer(String.class, customStringManufacturer);
+CustomProviderStrategy providerStrategy = new CustomProviderStrategy();
+PodamFactory factory = new PodamFactoryImpl(providerStrategy);
+Pojo pojo = factory.manufacturePojo(Pojo.class);
 +-----------------------------------
 
   Result:
@@ -330,19 +328,6 @@ factory.getStrategy().addOrReplaceTypeManufacturer(String.class, customStringMan
   "postCode":"00100",
   "url":"http://wikipedia.org"
 }
-+-----------------------------------
-
-** Specifing factories for POJOs
-
-  DataProviderStrategy can be extended to hint Podam with factory classes to
-  initialize POJOs.
-
-+-----------------------------------
-RandomDataProviderStrategy strategy = (RandomDataProviderStrategy) factory.getStrategy();
-strategy.addOrReplaceFactory(
-        javax.xml.transform.Transformer.class,
-        javax.xml.transform.TransformerFactory.class);
-Transformer pojo = factory.manufacturePojo(javax.xml.transform.Transformer.class);
 +-----------------------------------
 
 ** Manufacturing generic types
